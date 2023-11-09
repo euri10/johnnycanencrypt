@@ -245,28 +245,7 @@ class KeyStore:
                 sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
                 cursor.execute(sql, (oncard, primary_on_card, fingerprint))
         # Now let us rename the file
-        def get_pid_using_file(file_path):
-            try:
-                file_path = os.path.abspath(file_path)
-                for proc in psutil.process_iter(['pid', 'name', 'open_files']):
-                    try:
-                        if proc.info['open_files'] is not None:
-                            if file_path in [file.path for file in proc.info['open_files']]:
-                                print(proc.info)
-                                return proc.info['pid'], proc.info['name']
-                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                        pass
-            except Exception as e:
-                print(f"Error: {e}")
-            return None
-
-        pid_using_file, name = get_pid_using_file(self.dbpath)
-        print(pid_using_file)
-        print(name)
-        try:
-            os.rename(self.dbpath, oldpath)
-        except OSError:
-            pass
+        os.rename(self.dbpath, oldpath)
         self.dbpath = oldpath
 
     def update_password(self, key: Key, password: str, newpassword: str) -> Key:
