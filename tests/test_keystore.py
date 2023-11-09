@@ -25,7 +25,8 @@ def test_nonexisting_keystore_path():
 
 def test_str(tmp_path):
     ks = jce.KeyStore(tmp_path)
-    assert str(ks) == f"<KeyStore dbpath={tmp_path.as_posix()}/jce.db>"
+    path = tmp_path / "jce.db"
+    assert str(ks) == f"<KeyStore dbpath={path.as_posix()}>"
 
 
 def test_no_such_key():
