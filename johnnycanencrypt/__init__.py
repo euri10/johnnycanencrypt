@@ -260,7 +260,7 @@ class KeyStore:
             return None
 
         pid_using_file = get_pid_using_file(self.dbpath)
-
+        print(pid_using_file)
         os.rename(self.dbpath, oldpath)
         self.dbpath = oldpath
 
