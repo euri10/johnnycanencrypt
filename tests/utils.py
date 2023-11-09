@@ -1,6 +1,6 @@
 def _get_cert_data(filepath):
     "Returns the filepath content as bytes"
-    with open(filepath, "rb", encoding="utf-8") as fobj:
+    with open(filepath, "rb") as fobj:
         return fobj.read()
 
 
