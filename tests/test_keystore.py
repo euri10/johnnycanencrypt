@@ -575,7 +575,7 @@ def test_ks_upgrade(tmp_path):
     "tests db upgrade from an old db"
     shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db", tmp_path / "jce.db")
 
-    ks = jce.KeyStore(tmp_path.name)
+    ks = jce.KeyStore(tmp_path.as_posix())
     con = sqlite3.connect(ks.dbpath)
     con.row_factory = sqlite3.Row
     # First we will check if this db schema is old or not

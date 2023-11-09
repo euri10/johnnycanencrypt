@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: © 2020 Kushal Das <mail@kushaldas.in>
 # SPDX-License-Identifier: LGPL-3.0-or-later
-
+import shutil
 import sqlite3
 import urllib.parse
 from datetime import datetime
@@ -192,7 +192,7 @@ class KeyStore:
                 existing_records = cursor.fetchall()
             else:
                 return
-        # Temporay db setup
+        # Temporary db setup
         oldpath = self.dbpath
         self.dbpath = self.path / "jce_upgrade.db"
         if self.dbpath.exists():  # Means the upgrade db already exist.
@@ -243,7 +243,7 @@ class KeyStore:
                 sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
                 cursor.execute(sql, (oncard, primary_on_card, fingerprint))
         # Now let us rename the file
-        self.dbpath.rename(oldpath)
+        shutil.move(self.dbpath, oldpath)
         self.dbpath = oldpath
 
     def update_password(self, key: Key, password: str, newpassword: str) -> Key:
