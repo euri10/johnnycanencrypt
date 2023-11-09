@@ -252,15 +252,17 @@ class KeyStore:
                     try:
                         if proc.info['open_files'] is not None:
                             if file_path in [file.path for file in proc.info['open_files']]:
-                                return proc.info['pid']
+                                print(proc.info)
+                                return proc.info['pid'], proc.info['name']
                     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                         pass
             except Exception as e:
                 print(f"Error: {e}")
             return None
 
-        pid_using_file = get_pid_using_file(self.dbpath)
+        pid_using_file, name = get_pid_using_file(self.dbpath)
         print(pid_using_file)
+        print(name)
         os.rename(self.dbpath, oldpath)
         self.dbpath = oldpath
 
