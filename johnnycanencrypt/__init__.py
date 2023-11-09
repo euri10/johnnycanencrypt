@@ -195,7 +195,7 @@ class KeyStore:
                 return
         # Temporary db setup
         oldpath = self.dbpath
-        self.dbpath = Path("jce_upgrade.db")
+        self.dbpath = self.path / "jce_upgrade.db"
         if self.dbpath.exists():  # Means the upgrade db already exist.
             # Unrecoverable error
             raise RuntimeError(
