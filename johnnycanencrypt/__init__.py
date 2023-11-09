@@ -1,8 +1,6 @@
 # SPDX-FileCopyrightText: © 2020 Kushal Das <mail@kushaldas.in>
 # SPDX-License-Identifier: LGPL-3.0-or-later
-import os
 import sqlite3
-import tempfile
 import urllib.parse
 from datetime import datetime
 from enum import Enum
@@ -10,7 +8,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union, Tuple, Any
 
 import httpx
-import psutil
 
 from .exceptions import FetchingError, KeyNotFoundError
 from .johnnycanencrypt import (
@@ -243,7 +240,7 @@ class KeyStore:
                 sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
                 cursor.execute(sql, (oncard, primary_on_card, fingerprint))
         # Now let us rename the file
-        os.rename(self.dbpath, oldpath)
+        self.dbpath.rename(oldpath)
         self.dbpath = oldpath
 
     def update_password(self, key: Key, password: str, newpassword: str) -> Key:
