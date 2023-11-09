@@ -48,7 +48,7 @@ def test_sign_verify_file_cleartext(tmp_path):
         True,
     )
     assert os.path.exists(output)
-    with open(output) as fobj:
+    with open(output, encoding="utf-8") as fobj:
         data = fobj.read()
     assert data.startswith("-----BEGIN PGP SIGNED MESSAGE-----")
     assert "🦄🦄🦄" in data
