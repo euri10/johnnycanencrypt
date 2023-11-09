@@ -230,8 +230,6 @@ class KeyStore:
                 creationtime,
                 othervalues,
             )
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
         with con:
             cursor = con.cursor()
             for row in existing_records:
