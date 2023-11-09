@@ -573,7 +573,7 @@ def test_key_with_multiple_uids(tmp_path):
 
 def test_ks_upgrade(tmp_path):
     "tests db upgrade from an old db"
-    # shutil.copy(BASE_TESTSDIR / "files/store/oldjce.db", tmp_path / "jce.db")
+    shutil.copyfile(BASE_TESTSDIR / "files/store/oldjce.db", tmp_path / "jce.db")
 
     ks = jce.KeyStore(tmp_path.as_posix())
     con = sqlite3.connect(ks.dbpath)
