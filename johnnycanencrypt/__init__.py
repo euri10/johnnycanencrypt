@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union, Tuple, Any
 
 import httpx
+import psutil
 
 from .exceptions import FetchingError, KeyNotFoundError
 from .johnnycanencrypt import (
@@ -244,6 +245,22 @@ class KeyStore:
                 sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
                 cursor.execute(sql, (oncard, primary_on_card, fingerprint))
         # Now let us rename the file
+        def get_pid_using_file(file_path):
+            try:
+                file_path = os.path.abspath(file_path)
+                for proc in psutil.process_iter(['pid', 'name', 'open_files']):
+                    try:
+                        if proc.info['open_files'] is not None:
+                            if file_path in [file.path for file in proc.info['open_files']]:
+                                return proc.info['pid']
+                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                        pass
+            except Exception as e:
+                print(f"Error: {e}")
+            return None
+
+        pid_using_file = get_pid_using_file(self.dbpath)
+
         os.rename(self.dbpath, oldpath)
         self.dbpath = oldpath
 
