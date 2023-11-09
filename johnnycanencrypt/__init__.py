@@ -195,58 +195,57 @@ class KeyStore:
                 return
         # Temporary db setup
         oldpath = self.dbpath
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            self.dbpath = Path(tmpdirname) / "jce_upgrade.db"
-            if self.dbpath.exists():  # Means the upgrade db already exist.
-                # Unrecoverable error
-                raise RuntimeError(
-                    f"{self.dbpath} already exists, please remove and then try again."
-                )
-            con = sqlite3.connect(self.dbpath)
-            con.row_factory = sqlite3.Row
-            with con:
-                cursor = con.cursor()
-                cursor.executescript(createdb)
-                # we have to insert the date when this database schema was generated
-                cursor.execute(
-                    f"INSERT INTO dbupgrade (upgradedate) values (?)", (DB_UPGRADE_DATE,)
-                )
-            # now let us insert our existing data
+        self.dbpath = Path("jce_upgrade.db")
+        if self.dbpath.exists():  # Means the upgrade db already exist.
+            # Unrecoverable error
+            raise RuntimeError(
+                f"{self.dbpath} already exists, please remove and then try again."
+            )
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        with con:
+            cursor = con.cursor()
+            cursor.executescript(createdb)
+            # we have to insert the date when this database schema was generated
+            cursor.execute(
+                f"INSERT INTO dbupgrade (upgradedate) values (?)", (DB_UPGRADE_DATE,)
+            )
+        # now let us insert our existing data
+        for row in existing_records:
+            (
+                uids,
+                fingerprint,
+                keytype,
+                expirationtime,
+                creationtime,
+                othervalues,
+            ) = parse_cert_bytes(row["keyvalue"])
+            self._save_key_info_to_db(
+                row["keyvalue"],
+                uids,
+                fingerprint,
+                keytype,
+                expirationtime,
+                creationtime,
+                othervalues,
+            )
+        con = sqlite3.connect(self.dbpath)
+        con.row_factory = sqlite3.Row
+        with con:
+            cursor = con.cursor()
             for row in existing_records:
-                (
-                    uids,
-                    fingerprint,
-                    keytype,
-                    expirationtime,
-                    creationtime,
-                    othervalues,
-                ) = parse_cert_bytes(row["keyvalue"])
-                self._save_key_info_to_db(
-                    row["keyvalue"],
-                    uids,
-                    fingerprint,
-                    keytype,
-                    expirationtime,
-                    creationtime,
-                    othervalues,
-                )
-            con = sqlite3.connect(self.dbpath)
-            con.row_factory = sqlite3.Row
-            with con:
-                cursor = con.cursor()
-                for row in existing_records:
-                    oncard = row["oncard"]
-                    # The following because this column may not exist at all
-                    try:
-                        primary_on_card = row["primary_on_card"]
-                    except IndexError:
-                        primary_on_card = ""
-                    fingerprint = row["fingerprint"]
-                    sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
-                    cursor.execute(sql, (oncard, primary_on_card, fingerprint))
-            # Now let us rename the file
-            os.rename(self.dbpath, oldpath)
-            self.dbpath = oldpath
+                oncard = row["oncard"]
+                # The following because this column may not exist at all
+                try:
+                    primary_on_card = row["primary_on_card"]
+                except IndexError:
+                    primary_on_card = ""
+                fingerprint = row["fingerprint"]
+                sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
+                cursor.execute(sql, (oncard, primary_on_card, fingerprint))
+        # Now let us rename the file
+        os.rename(self.dbpath, oldpath)
+        self.dbpath = oldpath
 
     def update_password(self, key: Key, password: str, newpassword: str) -> Key:
         """Updates the password of the given key and saves to the database"""
