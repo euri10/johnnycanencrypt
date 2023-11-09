@@ -263,7 +263,10 @@ class KeyStore:
         pid_using_file, name = get_pid_using_file(self.dbpath)
         print(pid_using_file)
         print(name)
-        os.rename(self.dbpath, oldpath)
+        try:
+            os.rename(self.dbpath, oldpath)
+        except OSError:
+            pass
         self.dbpath = oldpath
 
     def update_password(self, key: Key, password: str, newpassword: str) -> Key:
