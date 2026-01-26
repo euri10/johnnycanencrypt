@@ -13,9 +13,51 @@ on:
 env:
   FORCE_COLOR: "1"
   UV_LINK_MODE: "copy"
+
 jobs:
 
+  tests_linux_postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      JCE_DB_BACKEND: postgres
+      JCE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install UV
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Set up venv
+        run: |
+          uv venv
+          source .venv/bin/activate
+          uv pip install -r requirements-dev.txt
+          uv pip install -e .
+
+      - name: Run tests (includes Postgres integration)
+        run: |
+          source .venv/bin/activate
+          pytest -q
+
+
   manylinux_x86_64:
+
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
