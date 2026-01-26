@@ -116,9 +116,89 @@ class AsyncKeyStore:
             primary_on_card=primary_on_card,
         )
 
+
+
+    async def get_key(self, fingerprint: str):
+        """Return a Key by fingerprint.
+
+        Parity target: KeyStore.get_key.
+
+        Initial implementation returns a Key object with keyvalue/fingerprint/keyid
+        populated and an empty uids/subkeys structure. Full reconstruction from the
+        normalized tables will be added next.
+        """
+
+        # Importing from package __init__ would create a circular import.
+        from . import Key, KeyType
+        from .exceptions import KeyNotFoundError
+
+        row = await self._db.get_key_row_by_fingerprint(fingerprint)
+        if row is None:
+            raise KeyNotFoundError("The key(s) not found in the keystore.")
+
+        keytype = KeyType.SECRET if row.get("keytype") else KeyType.PUBLIC
+
+        return Key(
+            row["keyvalue"],
+            row["fingerprint"],
+            row["keyid"],
+            [],
+            keytype,
+            row.get("expiration") or "",
+            row.get("creation") or "",
+            {},
+            row.get("oncard") or "",
+            row.get("can_primary_sign") or 0,
+            row.get("primary_on_card") or "",
+        )
+
+
     async def ensure_schema_current(self) -> None:
         """Ensure the schema exists and `dbupgrade` has the current version row."""
 
         await self._db.ensure_schema_current()
+
+    async def import_key(self, keypath: Union[str, Path], onplace: bool = False):
+        """Import a key file into the Postgres-backed async keystore.
+
+        Mirrors the synchronous KeyStore.import_key behavior.
+
+        Parameters
+        - keypath: path to the key file (ASCII armored or binary)
+        - onplace: currently ignored (kept for API parity)
+        """
+
+        # NOTE: `parse_cert_file` returns parsed metadata, but we need the raw cert bytes
+        # to store in the DB (`keys.keyvalue`).
+        from .johnnycanencrypt import parse_cert_file
+
+        if isinstance(keypath, Path):
+            path = str(keypath)
+        else:
+            path = str(keypath)
+
+        (
+            uids,
+            fingerprint,
+            keytype,
+            expirationtime,
+            creationtime,
+            othervalues,
+        ) = parse_cert_file(path)
+
+        with open(path, "rb") as fobj:
+            cert = fobj.read()
+
+        await self._db.save_full_key(
+            cert=cert,
+            uids=uids,
+            fingerprint=fingerprint,
+            keytype=keytype,
+            expirationtime=expirationtime,
+            creationtime=creationtime,
+            othervalues=othervalues,
+        )
+
+        return await self.get_key(fingerprint)
 
 
