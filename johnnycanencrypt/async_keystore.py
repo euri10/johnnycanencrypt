@@ -78,8 +78,26 @@ class AsyncKeyStore:
         finally:
             await conn.close()
 
+    async def list_fingerprints(self) -> list[str]:
+        """Return all key fingerprints in the keystore DB.
+
+        This is the first real async DB operation (read-only) and is intended as
+        a thin proof-of-life for async PostgreSQL usage.
+        """
+
+        await self.ensure_schema_current()
+
+        conn = await self.connect()
+        try:
+            rows = await conn.fetch("SELECT fingerprint FROM keys ORDER BY fingerprint")
+            return [r["fingerprint"] for r in rows]
+        finally:
+            await conn.close()
+
+
     async def ensure_schema_current(self) -> None:
         """Ensure the schema exists and `dbupgrade` has the current version row."""
+
 
         from .utils import DB_UPGRADE_DATE
 
