@@ -62,7 +62,7 @@ For the rest of the documentation we assume that you imported the module as foll
                 ::
 
                         >>> ks = jce.KeyStore("/var/lib/myamazingapp")
-                        >>> newkey = ks.create_key("supersecretpassphrasefromdiceware", "test key1 <email@example.com>", jce.KeyType.RSA4k)
+                        >>> newkey = ks.create_key("supersecretpassphrasefromdiceware", "test key1 <email@example.com>", jce.Cipher.RSA4k)
 
         .. method:: encrypt(keys, data, outputfile="", armor=True) -> bytes:
 
