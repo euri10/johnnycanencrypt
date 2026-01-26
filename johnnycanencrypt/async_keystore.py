@@ -14,10 +14,10 @@ import os
 from pathlib import Path
 from typing import Union
 
+from .async_pg_backend import AsyncPgBackend
 from .db import load_db_config
 
 StrOrBytesPath = Union[str, bytes, os.PathLike]
-
 
 
 class AsyncKeyStore:
@@ -55,12 +55,13 @@ class AsyncKeyStore:
                 "Use KeyStore for sqlite."
             )
 
+        assert self._cfg.database_url is not None
+        self._db = AsyncPgBackend.from_db_config(self._cfg)
+
     async def connect(self):
         """Create and return an asyncpg connection."""
-        import asyncpg
 
-        assert self._cfg.database_url is not None
-        return await asyncpg.connect(self._cfg.database_url)
+        return await self._db.connect()
 
     async def initialize_schema(self) -> None:
         """Initialize schema on a fresh Postgres database.
@@ -70,13 +71,7 @@ class AsyncKeyStore:
         For post-init version handling, see `ensure_schema_current()`.
         """
 
-        from .schema import POSTGRES_SCHEMA
-
-        conn = await self.connect()
-        try:
-            await conn.execute(POSTGRES_SCHEMA)
-        finally:
-            await conn.close()
+        await self._db.initialize_schema()
 
     async def list_fingerprints(self) -> list[str]:
         """Return all key fingerprints in the keystore DB.
@@ -85,14 +80,7 @@ class AsyncKeyStore:
         a thin proof-of-life for async PostgreSQL usage.
         """
 
-        await self.ensure_schema_current()
-
-        conn = await self.connect()
-        try:
-            rows = await conn.fetch("SELECT fingerprint FROM keys ORDER BY fingerprint")
-            return [r["fingerprint"] for r in rows]
-        finally:
-            await conn.close()
+        return await self._db.list_fingerprints()
 
     async def save_key_info(
         self,
@@ -116,54 +104,21 @@ class AsyncKeyStore:
         - The full schema (subkeys/uids/certs) will be added incrementally.
         """
 
-        await self.ensure_schema_current()
-
-        conn = await self.connect()
-        try:
-            await conn.execute(
-                """
-                INSERT INTO keys (
-                    keyvalue, fingerprint, keyid, keytype, expiration, creation,
-                    can_primary_sign, oncard, primary_on_card
-                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-                ON CONFLICT DO NOTHING
-                """,
-                keyvalue,
-                fingerprint,
-                keyid,
-                keytype,
-                expiration,
-                creation,
-                can_primary_sign,
-                oncard,
-                primary_on_card,
-            )
-        finally:
-            await conn.close()
-
-
+        await self._db.save_key_info(
+            keyvalue=keyvalue,
+            fingerprint=fingerprint,
+            keyid=keyid,
+            keytype=keytype,
+            expiration=expiration,
+            creation=creation,
+            can_primary_sign=can_primary_sign,
+            oncard=oncard,
+            primary_on_card=primary_on_card,
+        )
 
     async def ensure_schema_current(self) -> None:
         """Ensure the schema exists and `dbupgrade` has the current version row."""
 
+        await self._db.ensure_schema_current()
 
-        from .utils import DB_UPGRADE_DATE
-
-        await self.initialize_schema()
-
-        conn = await self.connect()
-        try:
-            row = await conn.fetchrow("SELECT upgradedate FROM dbupgrade LIMIT 1")
-            if row is None:
-                await conn.execute(
-                    "INSERT INTO dbupgrade (upgradedate) VALUES ($1)", DB_UPGRADE_DATE
-                )
-            elif row["upgradedate"] != DB_UPGRADE_DATE:
-                # Placeholder for future migrations.
-                raise RuntimeError(
-                    "Database schema upgrade required (dbupgrade=%r, expected=%r)"
-                    % (row["upgradedate"], DB_UPGRADE_DATE)
-                )
-        finally:
-            await conn.close()
 

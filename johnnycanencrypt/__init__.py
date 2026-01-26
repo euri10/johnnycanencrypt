@@ -23,6 +23,9 @@ from .johnnycanencrypt import (CryptoError, Johnny, TouchMode, create_key,
 from .utils import _get_cert_data  # noqa: F401
 from .utils import DB_UPGRADE_DATE, convert_fingerprint, createdb, to_sort_by_expiry
 
+from .async_keystore import AsyncKeyStore
+
+
 
 
 # To use for type checking
