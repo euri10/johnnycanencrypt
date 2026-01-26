@@ -51,6 +51,33 @@ maturin build --release
 - This repo uses `uv` in CI (`.github/workflows/ci_pr.yml`), and includes `uv.lock`.
 - No `ruff.toml`/`.ruff.toml`, `pytest.ini`, `tox.ini`, `.editorconfig`, or `.pre-commit-config.yaml` were found at the repo root during discovery.
 
+## Repo patterns and practices (observed)
+
+- **Folder layout**
+  - Python package code lives in `johnnycanencrypt/`.
+  - Rust crate code lives in `src/` and is built as a `cdylib` for Python.
+  - Tests are `pytest`-style in `tests/` and frequently import helpers from `tests/utils.py`.
+
+- **Sync/async parity**
+  - The repo maintains **sync and async variants** of the DB/keystore APIs.
+  - Async modules intentionally mirror the sync contracts (“parity with ...” docstrings).
+  - Backward-compat re-export modules exist (e.g. `johnnycanencrypt/async_keystore.py` re-exports from `johnnycanencrypt/async_db/keystore.py`).
+
+- **Configuration is environment-driven**
+  - DB backend selection is driven by env vars (see `johnnycanencrypt/db/backend.py`):
+    - `JCE_DB_BACKEND` (`sqlite` default, `postgres`/`postgresql` supported)
+    - `JCE_DATABASE_URL` (or `DATABASE_URL` fallback)
+
+- **Schema versioning approach**
+  - DB schema is defined as SQL strings (e.g. `johnnycanencrypt/utils.py: createdb`).
+  - A single schema “version” value is tracked via `DB_UPGRADE_DATE`.
+  - SQLite upgrades are implemented as a **file-swap + data copy** procedure (`SqliteBackend.upgrade_if_required_with`).
+  - Postgres async backend currently validates the schema version and errors if it mismatches (no auto-migrations).
+
+- **Error handling style**
+  - Domain exceptions are minimal and live in `johnnycanencrypt/exceptions.py`.
+  - Many code paths raise standard exceptions with explicit messages (e.g. `ValueError`, `NotImplementedError`, `RuntimeError`).
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
