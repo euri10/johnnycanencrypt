@@ -24,8 +24,12 @@ async def test_async_keystore_import_key_roundtrip(tmp_path, monkeypatch):
     key = await ks.import_key(BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc")
 
     # Fingerprint is asserted by follow-up get_key call
+    key2 = await ks.get_key(key.fingerprint)
+    assert key2.fingerprint == key.fingerprint
+
     # Parity checks: ensure uid fields are reconstructed from normalized tables
     assert len(key2.uids) > 0
     assert any(u.get("email") for u in key2.uids)
     assert any(u.get("name") for u in key2.uids)
+
 
