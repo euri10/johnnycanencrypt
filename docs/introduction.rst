@@ -50,6 +50,66 @@ Now, if we check the directory from the shell, we will find the keys imported th
         and use them along wtih the module. `This function <https://docs.sequoia-pgp.org/sequoia_openpgp/policy/struct.StandardPolicy.html#method.reject_hash_at>`_ explains in some details why.
 
 
+AsyncKeyStore (PostgreSQL via asyncpg)
+-------------------------------------
+
+The synchronous :class:`~johnnycanencrypt.KeyStore` uses a SQLite database stored inside the keystore directory.
+
+For PostgreSQL support, johnnycanencrypt provides an **async** API surface via :class:`~johnnycanencrypt.AsyncKeyStore`.
+This avoids forcing synchronous callers into event-loop management.
+
+Configuration
+~~~~~~~~~~~~~
+
+AsyncKeyStore selects the backend via environment variables:
+
+- ``JCE_DB_BACKEND``: set to ``postgres``
+- ``JCE_DATABASE_URL``: PostgreSQL DSN/URL
+
+Example:
+
+::
+
+        export JCE_DB_BACKEND=postgres
+        export JCE_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
+
+Basic usage
+~~~~~~~~~~~
+
+::
+
+        import anyio
+        import johnnycanencrypt as jce
+
+
+        async def main():
+            # Any existing directory can act as the keystore "root".
+            # For Postgres, the DB is external, but the API still takes a path.
+            ks = jce.AsyncKeyStore("/var/lib/myapplication/keys")
+
+            # Import a key (persists key + uids + subkeys + certifications)
+            key = await ks.import_key("tests/files/store/pgp_keys.asc")
+
+            # Read operations
+            same_key = await ks.get_key(key.fingerprint)
+            keys_by_email = await ks.get_keys(qvalue="kushaldas@gmail.com", qtype="email")
+
+            # Write operations
+            await ks.delete_key(key.fingerprint)
+
+
+        if __name__ == "__main__":
+            anyio.run(main)
+
+Notes
+~~~~~
+
+- ``AsyncKeyStore`` currently requires the Postgres backend.
+- Automatic Postgres schema migrations are not implemented; if the schema version changes
+  the library will raise an error instructing you to re-initialize or migrate manually.
+
+
+
 KeyStore path for the applicaitons which can run per user
 ----------------------------------------------------------
 
