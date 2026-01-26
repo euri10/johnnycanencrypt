@@ -122,35 +122,19 @@ class AsyncKeyStore:
         """Return a Key by fingerprint.
 
         Parity target: KeyStore.get_key.
-
-        Initial implementation returns a Key object with keyvalue/fingerprint/keyid
-        populated and an empty uids/subkeys structure. Full reconstruction from the
-        normalized tables will be added next.
         """
 
-        # Importing from package __init__ would create a circular import.
-        from . import Key, KeyType
-        from .exceptions import KeyNotFoundError
+        return await self._db.get_key(fingerprint)
 
-        row = await self._db.get_key_row_by_fingerprint(fingerprint)
-        if row is None:
-            raise KeyNotFoundError("The key(s) not found in the keystore.")
 
-        keytype = KeyType.SECRET if row.get("keytype") else KeyType.PUBLIC
 
-        return Key(
-            row["keyvalue"],
-            row["fingerprint"],
-            row["keyid"],
-            [],
-            keytype,
-            row.get("expiration") or "",
-            row.get("creation") or "",
-            {},
-            row.get("oncard") or "",
-            row.get("can_primary_sign") or 0,
-            row.get("primary_on_card") or "",
-        )
+    async def get_keys(self, qvalue: str, qtype: str = "email"):
+        """Return keys by query.
+
+        Parity target: KeyStore.get_keys.
+        """
+
+        return await self._db.get_keys(qvalue, qtype=qtype)
 
 
     async def ensure_schema_current(self) -> None:
@@ -200,5 +184,6 @@ class AsyncKeyStore:
         )
 
         return await self.get_key(fingerprint)
+
 
 

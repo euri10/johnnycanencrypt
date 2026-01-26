@@ -55,7 +55,6 @@ class AsyncPgBackend(AsyncDbBackend):
         finally:
             await conn.close()
 
-
     async def list_fingerprints(self) -> list[str]:
         await self.ensure_schema_current()
 
@@ -91,7 +90,6 @@ class AsyncPgBackend(AsyncDbBackend):
                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
                 ON CONFLICT (fingerprint) DO NOTHING
                 """,
-
                 keyvalue,
                 fingerprint,
                 keyid,
@@ -105,14 +103,8 @@ class AsyncPgBackend(AsyncDbBackend):
         finally:
             await conn.close()
 
-
-
     async def get_key_row_by_fingerprint(self, fingerprint: str) -> dict | None:
-        """Return the raw `keys` row for a fingerprint.
-
-        This is a building block for higher-level APIs that reconstruct the full
-        Key object (uids/subkeys/certs). For now we only expose the minimal row.
-        """
+        """Return the raw `keys` row for a fingerprint."""
 
         await self.ensure_schema_current()
 
@@ -125,8 +117,6 @@ class AsyncPgBackend(AsyncDbBackend):
             return dict(row) if row is not None else None
         finally:
             await conn.close()
-
-
 
     async def save_full_key(
         self,
@@ -147,10 +137,6 @@ class AsyncPgBackend(AsyncDbBackend):
 
         Returns
         - key_id: integer primary key in `keys`.
-
-        Notes
-        - Unlike the sync implementation, this avoids merge/update semantics for
-          existing secret keys. For now it behaves like an upsert.
         """
 
         await self.ensure_schema_current()
@@ -167,13 +153,12 @@ class AsyncPgBackend(AsyncDbBackend):
         try:
             async with conn.transaction():
                 existing = await conn.fetchrow(
-                    "SELECT id, keytype FROM keys WHERE fingerprint=$1",
+                    "SELECT id FROM keys WHERE fingerprint=$1",
                     fingerprint,
                 )
 
                 if existing:
                     key_id = int(existing["id"])
-                    # For now: keep simple and update the row.
                     await conn.execute(
                         """
                         UPDATE keys
@@ -296,7 +281,6 @@ class AsyncPgBackend(AsyncDbBackend):
                                 ucert_id,
                             )
 
-                    # uid emails/names/uris
                     if uid.get("email"):
                         await conn.execute(
                             "INSERT INTO uidemails (value, key_id, value_id) VALUES ($1,$2,$3)",
@@ -323,15 +307,10 @@ class AsyncPgBackend(AsyncDbBackend):
         finally:
             await conn.close()
 
-
     async def get_key_ids_by_query(
         self, *, qvalue: str, qtype: str = "email"
     ) -> list[int]:
-        """Return key IDs matching a query (email/value/name/uri).
-
-        Mirrors the sync KeyStore.get_keys() query semantics, but returns DB ids.
-        Higher-level code can then fetch full key objects.
-        """
+        """Return key IDs matching a query (email/value/name/uri)."""
 
         if qtype not in ["email", "value", "uri", "name"]:
             raise ValueError("qtype must be one of: email, value, name, uri")
@@ -356,3 +335,195 @@ class AsyncPgBackend(AsyncDbBackend):
         finally:
             await conn.close()
 
+    # --- full read parity (Key reconstruction) ---
+
+    async def _get_one_row_from_table(
+        self, conn, tablename: str, value_id: int
+    ) -> str:
+        row = await conn.fetchrow(
+            f"SELECT value FROM {tablename} WHERE value_id=$1",
+            value_id,
+        )
+        if row:
+            return row["value"]
+        return ""
+
+    async def _build_key_list(self, rows) -> list["Key"]:
+        from datetime import datetime
+
+        from . import Key, KeyType
+        from .exceptions import KeyNotFoundError
+        from .utils import to_sort_by_expiry
+
+        conn = await self.connect()
+        try:
+            finalresult: list[Key] = []
+            sql_for_certs = "SELECT value, datatype FROM uidcertlist WHERE cert_id=$1"
+
+            for result in rows:
+                if not result:
+                    continue
+
+                key_id = int(result["id"])
+                cert = result["keyvalue"]
+                fingerprint = result["fingerprint"]
+                keyid = result["keyid"]
+                expirationtime = result["expiration"]
+                creationtime = result["creation"]
+                keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
+                oncard = result["oncard"]
+                can_primary_sign = result["can_primary_sign"]
+                primary_on_card = result["primary_on_card"]
+
+                uid_rows = await conn.fetch(
+                    "SELECT id, value, revoked FROM uidvalues WHERE key_id=$1",
+                    key_id,
+                )
+                uids = []
+                for row in uid_rows:
+                    value_id = int(row["id"])
+                    revoked = True if row["revoked"] == 1 else False
+
+                    email = await self._get_one_row_from_table(conn, "uidemails", value_id)
+                    name = await self._get_one_row_from_table(conn, "uidnames", value_id)
+                    uri = await self._get_one_row_from_table(conn, "uiduris", value_id)
+
+                    certrows = await conn.fetch(
+                        "SELECT id, ctype, creation FROM uidcerts WHERE key_id=$1 and value_id=$2",
+                        key_id,
+                        value_id,
+                    )
+                    certifications = []
+                    for uidcert in certrows:
+                        cert_result = {}
+                        cert_result["creationtime"] = uidcert["creation"]
+                        cert_result["certification_type"] = uidcert["ctype"]
+                        ucertid = int(uidcert["id"])
+                        cert_issuers = await conn.fetch(sql_for_certs, ucertid)
+                        issuers = []
+                        for cissuer in cert_issuers:
+                            issuers.append((cissuer["datatype"], cissuer["value"]))
+                        cert_result["certification_list"] = issuers
+                        certifications.append(cert_result)
+
+                    uids.append(
+                        {
+                            "value": row["value"],
+                            "revoked": revoked,
+                            "email": email,
+                            "name": name,
+                            "uri": uri,
+                            "certifications": certifications,
+                        }
+                    )
+
+                subkey_rows = await conn.fetch(
+                    "SELECT fingerprint, keyid, expiration, creation, keytype, revoked FROM subkeys WHERE key_id=$1",
+                    key_id,
+                )
+                othervalues: dict = {}
+                subs: dict = {}
+                sort_subkeys: list[dict] = []
+
+                for row in subkey_rows:
+                    etime = (
+                        datetime.fromtimestamp(float(row["expiration"]))
+                        if row["expiration"]
+                        else None
+                    )
+                    ctime = (
+                        datetime.fromtimestamp(float(row["creation"]))
+                        if row["creation"]
+                        else None
+                    )
+                    subs[row["keyid"]] = (
+                        row["fingerprint"],
+                        etime,
+                        ctime,
+                        row["keytype"],
+                        bool(row["revoked"]),
+                    )
+                    sort_subkeys.append(
+                        {
+                            "keyid": row["keyid"],
+                            "fingerprint": row["fingerprint"],
+                            "expiration": etime,
+                            "creation": ctime,
+                            "keytype": row["keytype"],
+                            "revoked": bool(row["revoked"]),
+                        }
+                    )
+
+                sort_subkeys.sort(key=lambda x: to_sort_by_expiry(x), reverse=True)
+                othervalues["subkeys"] = subs
+                othervalues["subkeys_sorted"] = sort_subkeys
+
+                finalresult.append(
+                    Key(
+                        cert,
+                        fingerprint,
+                        keyid,
+                        uids,
+                        keytype,
+                        expirationtime,
+                        creationtime,
+                        othervalues,
+                        oncard,
+                        can_primary_sign,
+                        primary_on_card,
+                    )
+                )
+
+            if finalresult:
+                return finalresult
+            raise KeyNotFoundError("The key(s) not found in the keystore.")
+        finally:
+            await conn.close()
+
+    async def get_key(self, fingerprint: str):
+        await self.ensure_schema_current()
+
+        conn = await self.connect()
+        try:
+            rows = await conn.fetch(
+                "SELECT * FROM keys WHERE fingerprint=$1",
+                fingerprint,
+            )
+        finally:
+            await conn.close()
+
+        return (await self._build_key_list(rows))[0]
+
+    async def get_keys(self, qvalue: str, qtype: str = "email") -> list["Key"]:
+        if qtype not in ["email", "value", "uri", "name"]:
+            raise ValueError("We need at least one of the email/name/value/uri.")
+
+        await self.ensure_schema_current()
+
+        table_by_type = {
+            "value": "uidvalues",
+            "email": "uidemails",
+            "name": "uidnames",
+            "uri": "uiduris",
+        }
+        table = table_by_type[qtype]
+
+        conn = await self.connect()
+        try:
+            rows = await conn.fetch(
+                f"SELECT id, key_id FROM {table} WHERE value=$1",
+                qvalue,
+            )
+
+            results = []
+            unique_fingerprints = set()
+            for row in rows:
+                key_id = int(row["key_id"])
+                key_rows = await conn.fetch("SELECT * FROM keys WHERE id=$1", key_id)
+                key = (await self._build_key_list(key_rows))[0]
+                if key.fingerprint not in unique_fingerprints:
+                    unique_fingerprints.add(key.fingerprint)
+                    results.append(key)
+            return results
+        finally:
+            await conn.close()
