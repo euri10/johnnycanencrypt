@@ -150,12 +150,24 @@ class KeyStore:
             raise OSError(f"The {fullpath} does not exist.")
         self.path = fullpath
 
-        # Database backend (currently SQLite).
+        # Database backend (default: SQLite).
+        #
+        # Selection is environment-driven for now:
+        # - JCE_DB_BACKEND=sqlite|postgres
+        # - JCE_DATABASE_URL=... (postgres only)
         #
         # NOTE: `_db` is an internal detail for now; tests currently use it.
-        from .db import DbConfig, SqliteBackend
+        from .db import SqliteBackend, load_db_config
 
-        self._db = SqliteBackend(DbConfig(root=self.path))
+        db_cfg = load_db_config(self.path)
+        if db_cfg.backend != "sqlite":
+            raise NotImplementedError(
+                "Only sqlite backend is implemented right now; "
+                "PostgreSQL will be added in a follow-up task."
+            )
+
+        self._db = SqliteBackend(db_cfg)
+
 
         self.dbpath: Path = self._db.dbpath
 

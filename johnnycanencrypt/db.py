@@ -9,22 +9,59 @@ PostgreSQL support will add a second implementation without changing KeyStore ca
 
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass
+
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol, Optional
+
 
 
 
 @dataclass(frozen=True)
 class DbConfig:
-    """Configuration for the local keystore database.
+    """Configuration for the keystore database.
 
-    For now, KeyStore uses a file-based SQLite DB at `<path>/jce.db`.
-    Future Postgres support will extend this with a DSN/URL-based config.
+    `KeyStore` is directory-based, but the database backend can be selected.
+
+    Environment-driven selection (initial implementation):
+    - `JCE_DB_BACKEND`: "sqlite" (default) or "postgres"
+    - `JCE_DATABASE_URL`: connection URL/DSN (required for postgres)
+
+    For sqlite, `root` is used and the DB lives at `<root>/jce.db`.
     """
 
-    # The directory that owns the keystore.
     root: Path
+    backend: Literal["sqlite", "postgres"] = "sqlite"
+    database_url: Optional[str] = None
+
+
+def load_db_config(root: Path) -> DbConfig:
+    """Load DB config from environment.
+
+    Defaults preserve existing behavior (sqlite file under `root`).
+    """
+
+    backend = ("%s" % (os.getenv("JCE_DB_BACKEND") or "sqlite")).strip().lower()
+    if backend not in {"sqlite", "postgres"}:
+        raise ValueError(
+            "Invalid JCE_DB_BACKEND. Expected 'sqlite' or 'postgres', got: %r" % backend
+        )
+
+    database_url = os.getenv("JCE_DATABASE_URL")
+
+    if backend == "postgres" and not database_url:
+        raise ValueError(
+            "JCE_DATABASE_URL is required when JCE_DB_BACKEND='postgres'"
+        )
+
+    return DbConfig(
+        root=root,
+        backend=backend,  # type: ignore[arg-type]
+        database_url=database_url,
+    )
+
 
 
 class DbBackend(Protocol):
