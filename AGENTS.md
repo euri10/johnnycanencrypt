@@ -12,6 +12,45 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
+## Project Overview (quick discovery)
+
+- This is a **Python package with a Rust extension** built via **maturin**/**pyo3**.
+- Python package: `johnnycanencrypt/`
+- Rust crate: `src/` (builds a `cdylib`)
+- Tests: `tests/` (pytest)
+- Docs: `docs/` (Sphinx)
+
+## Where to look first
+
+- `README.md` – high-level build instructions
+- `pyproject.toml` – Python metadata + maturin build backend
+- `Cargo.toml` – Rust crate metadata + dependencies
+- `.github/workflows/ci_pr.yml` – authoritative CI commands (tests/build)
+
+## Common local commands
+
+```bash
+# Create venv + install dev deps
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+
+# Build + install the extension into the venv
+maturin develop
+
+# Run Python tests
+pytest -q
+
+# Release build (wheel)
+maturin build --release
+```
+
+## Notes on tooling
+
+- Type checking: `mypy.ini` is present.
+- This repo uses `uv` in CI (`.github/workflows/ci_pr.yml`), and includes `uv.lock`.
+- No `ruff.toml`/`.ruff.toml`, `pytest.ini`, `tox.ini`, `.editorconfig`, or `.pre-commit-config.yaml` were found at the repo root during discovery.
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
