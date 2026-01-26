@@ -8,4 +8,6 @@ scriv
 tzdata
 maturin
 asyncpg
+pytest-anyio
+
 

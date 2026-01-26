@@ -16,11 +16,9 @@ def test_async_keystore_requires_postgres_backend(tmp_path, monkeypatch):
         AsyncKeyStore(tmp_path)
 
 
-def test_async_keystore_can_init_schema_with_postgres(tmp_path, monkeypatch):
+@pytest.mark.anyio
+async def test_async_keystore_can_init_schema_with_postgres(tmp_path, monkeypatch):
     """Integration test (optional).
-
-    This repo currently doesn't depend on pytest-asyncio, so we drive the event loop
-    manually.
 
     Runs only when a real Postgres DSN is available.
     """
@@ -33,29 +31,22 @@ def test_async_keystore_can_init_schema_with_postgres(tmp_path, monkeypatch):
     monkeypatch.setenv("JCE_DATABASE_URL", dsn)
 
     from johnnycanencrypt.async_keystore import AsyncKeyStore
+    from johnnycanencrypt.utils import DB_UPGRADE_DATE
 
     ks = AsyncKeyStore(tmp_path)
+    await ks.ensure_schema_current()
 
-    import asyncio
-
-    async def _run():
-        await ks.ensure_schema_current()
-
-        # Basic smoke: dbupgrade must exist and have the expected schema date.
-        from johnnycanencrypt.utils import DB_UPGRADE_DATE
-
-        conn = await ks.connect()
-        try:
-            row = await conn.fetchrow("SELECT upgradedate FROM dbupgrade LIMIT 1")
-            assert row is not None
-            assert row["upgradedate"] == DB_UPGRADE_DATE
-        finally:
-            await conn.close()
-
-    asyncio.run(_run())
+    conn = await ks.connect()
+    try:
+        row = await conn.fetchrow("SELECT upgradedate FROM dbupgrade LIMIT 1")
+        assert row is not None
+        assert row["upgradedate"] == DB_UPGRADE_DATE
+    finally:
+        await conn.close()
 
 
-def test_async_keystore_list_fingerprints_smoke(tmp_path, monkeypatch):
+@pytest.mark.anyio
+async def test_async_keystore_list_fingerprints_smoke(tmp_path, monkeypatch):
     """Optional integration smoke test.
 
     Requires a Postgres DSN. Validates that list_fingerprints works on an empty DB.
@@ -71,15 +62,6 @@ def test_async_keystore_list_fingerprints_smoke(tmp_path, monkeypatch):
     from johnnycanencrypt.async_keystore import AsyncKeyStore
 
     ks = AsyncKeyStore(tmp_path)
-
-    import asyncio
-
-    async def _run():
-        fps = await ks.list_fingerprints()
-        assert fps == []
-
-    asyncio.run(_run())
-
-
-
+    fps = await ks.list_fingerprints()
+    assert fps == []
 
