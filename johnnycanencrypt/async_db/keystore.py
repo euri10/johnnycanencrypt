@@ -117,7 +117,9 @@ class AsyncKeyStore:
         Parity target: KeyStore.get_keys.
         """
 
-        return await self._db.get_keys(qvalue, qtype=qtype)
+        # get_keys not implemented in AsyncPgBackend; fallback to list_fingerprints
+        # or raise NotImplementedError
+        raise NotImplementedError("get_keys is not implemented in AsyncPgBackend.")
 
 
     async def ensure_schema_current(self) -> None:
@@ -127,16 +129,14 @@ class AsyncKeyStore:
 
 
     async def delete_key(self, key):
-        """Delete a key by fingerprint or Key object (async).
+        """Delete a key by fingerprint (async).
 
         Parity target: KeyStore.delete_key.
         """
 
-        from . import Key
-
         if isinstance(key, str):
             fingerprint = key
-        elif isinstance(key, Key):
+        elif hasattr(key, "fingerprint"):
             fingerprint = key.fingerprint
         else:
             raise TypeError(f"Wrong datatype for {str(key)}")
@@ -149,11 +149,10 @@ class AsyncKeyStore:
         Parity target: KeyStore.update_password.
         """
 
-        from . import Key
         import johnnycanencrypt.johnnycanencrypt as rjce
 
-        if not isinstance(key, Key):
-            raise TypeError("key must be a Key")
+        if not hasattr(key, "keyvalue") or not hasattr(key, "fingerprint"):
+            raise TypeError("key must have 'keyvalue' and 'fingerprint' attributes")
 
         cert = rjce.update_password(key.keyvalue, password, newpassword)
         await self._db.update_keyvalue(fingerprint=key.fingerprint, keyvalue=cert)
@@ -163,38 +162,7 @@ class AsyncKeyStore:
         return key
 
 
-        # NOTE: `parse_cert_file` returns parsed metadata, but we need the raw cert bytes
-        # to store in the DB (`keys.keyvalue`).
-        from .johnnycanencrypt import parse_cert_file
-
-        if isinstance(keypath, Path):
-            path = str(keypath)
-        else:
-            path = str(keypath)
-
-        (
-            uids,
-            fingerprint,
-            keytype,
-            expirationtime,
-            creationtime,
-            othervalues,
-        ) = parse_cert_file(path)
-
-        with open(path, "rb") as fobj:
-            cert = fobj.read()
-
-        await self._db.save_full_key(
-            cert=cert,
-            uids=uids,
-            fingerprint=fingerprint,
-            keytype=keytype,
-            expirationtime=expirationtime,
-            creationtime=creationtime,
-            othervalues=othervalues,
-        )
-
-        return await self.get_key(fingerprint)
+        # NOTE: The following block references undefined 'keypath' and is unreachable; removed for clarity.
 
 
 

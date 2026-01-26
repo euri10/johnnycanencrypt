@@ -26,7 +26,6 @@ from ..johnnycanencrypt import SameKeyError  # noqa: F401
 from ..johnnycanencrypt import (
     CryptoError,
     Johnny,
-    TouchMode,
     create_key,
     encrypt_bytes_to_bytes,
     encrypt_bytes_to_file,

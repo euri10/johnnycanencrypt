@@ -7,7 +7,6 @@ These SQL strings are intended to be executed on a fresh database.
 """
 
 # SQLite schema (kept for reference / parity checks)
-from .utils import createdb as SQLITE_SCHEMA
 
 
 POSTGRES_SCHEMA = """

@@ -1,11 +1,8 @@
 # We will slowly add more tests for rust codebase
 import datetime
-import os
-import tempfile
 
 from conftest import BASE_TESTSDIR
 
-import johnnycanencrypt as jce
 from johnnycanencrypt import johnnycanencrypt as rjce
 
 

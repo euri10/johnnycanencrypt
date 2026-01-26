@@ -5,7 +5,6 @@ import argparse
 import os
 import sys
 import tempfile
-from pprint import pprint
 
 import johnnycanencrypt as jce
 import johnnycanencrypt.johnnycanencrypt as rjce

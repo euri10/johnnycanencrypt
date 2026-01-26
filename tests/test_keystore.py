@@ -108,7 +108,7 @@ def test_keystore_contains_key(tmp_path):
     # Next the Key object
     assert k in ks
     # This should be false
-    assert not "1111111" in ks
+    assert "1111111" not in ks
 
 
 def test_keystore_details():

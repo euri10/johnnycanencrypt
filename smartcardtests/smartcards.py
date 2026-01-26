@@ -9,7 +9,6 @@ import tempfile
 import sys
 import os
 
-from pprint import pprint
 
 inp = input(
     "Please make sure *TEST SMARTCARD* is connected and then type Yes to continue: "

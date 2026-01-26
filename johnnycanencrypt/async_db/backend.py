@@ -9,7 +9,6 @@ Initial implementation provides an asyncpg-based PostgreSQL backend.
 
 from __future__ import annotations
 
-from ..db.backend import DbConfig
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Optional, Protocol

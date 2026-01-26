@@ -68,9 +68,11 @@ def load_db_config(root: Path) -> DbConfig:
             "JCE_DATABASE_URL (or DATABASE_URL) is required when JCE_DB_BACKEND is postgres"
         )
 
+    # Cast backend to the correct Literal type for mypy
+    from typing import cast
     return DbConfig(
         root=root,
-        backend=backend,
+        backend=cast(Literal["sqlite", "postgres"], backend),
         database_url=database_url,
     )
 

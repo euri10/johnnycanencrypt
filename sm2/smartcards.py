@@ -10,7 +10,6 @@ import tempfile
 import sys
 import os
 
-from pprint import pprint
 
 # Only run on GitHub CI or with --local flag
 def check_environment():

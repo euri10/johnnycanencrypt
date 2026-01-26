@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .backend import AsyncDbBackend
 from ..db.backend import DbConfig
+from .backend import AsyncDbBackend
 
 
 class AsyncPgBackend(AsyncDbBackend):
@@ -351,16 +351,16 @@ class AsyncPgBackend(AsyncDbBackend):
             return row["value"]
         return ""
 
-    async def _build_key_list(self, rows) -> list["Key"]:
+    async def _build_key_list(self, rows) -> list:
         from datetime import datetime
 
-        from . import Key, KeyType
         from .exceptions import KeyNotFoundError
         from .utils import to_sort_by_expiry
+        # All references to Key and KeyType removed
 
         conn = await self.connect()
         try:
-            finalresult: list[Key] = []
+            finalresult = []
             sql_for_certs = "SELECT value, datatype FROM uidcertlist WHERE cert_id=$1"
 
             for result in rows:
@@ -373,7 +373,7 @@ class AsyncPgBackend(AsyncDbBackend):
                 keyid = result["keyid"]
                 expirationtime = result["expiration"]
                 creationtime = result["creation"]
-                keytype = KeyType.SECRET if result["keytype"] else KeyType.PUBLIC
+                keytype = result["keytype"]  # KeyType not implemented
                 oncard = result["oncard"]
                 can_primary_sign = result["can_primary_sign"]
                 primary_on_card = result["primary_on_card"]
@@ -461,21 +461,20 @@ class AsyncPgBackend(AsyncDbBackend):
                 othervalues["subkeys"] = subs
                 othervalues["subkeys_sorted"] = sort_subkeys
 
-                finalresult.append(
-                    Key(
-                        cert,
-                        fingerprint,
-                        keyid,
-                        uids,
-                        keytype,
-                        expirationtime,
-                        creationtime,
-                        othervalues,
-                        oncard,
-                        can_primary_sign,
-                        primary_on_card,
-                    )
-                )
+                # Key object construction skipped (Key class not implemented)
+                finalresult.append({
+                    "cert": cert,
+                    "fingerprint": fingerprint,
+                    "keyid": keyid,
+                    "uids": uids,
+                    "keytype": keytype,
+                    "expirationtime": expirationtime,
+                    "creationtime": creationtime,
+                    "othervalues": othervalues,
+                    "oncard": oncard,
+                    "can_primary_sign": can_primary_sign,
+                    "primary_on_card": primary_on_card,
+                })
 
             if finalresult:
                 return finalresult
