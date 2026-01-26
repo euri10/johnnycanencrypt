@@ -1,9 +1,7 @@
 import datetime
 import os
 import tempfile
-
 from conftest import BASE_TESTSDIR
-
 import johnnycanencrypt.johnnycanencrypt as rustjce
 
 

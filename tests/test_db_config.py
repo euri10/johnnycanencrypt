@@ -1,6 +1,5 @@
 
 import pytest
-
 import johnnycanencrypt.db as jcedb
 
 

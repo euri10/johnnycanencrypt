@@ -1,20 +1,21 @@
 import os
-
+from typing import Any
+from pathlib import Path
 import pytest
+from johnnycanencrypt.async_db.pg_backend import AsyncPgBackend
+from johnnycanencrypt.utils import DB_UPGRADE_DATE
 
 
 def _get_dsn() -> str | None:
     return os.getenv("JCE_DATABASE_URL") or os.getenv("DATABASE_URL")
 
+# ...existing code...
 
 @pytest.mark.anyio
-async def test_async_pg_backend_schema_mismatch_raises_clear_error(tmp_path):
+async def test_async_pg_backend_schema_mismatch_raises_clear_error(tmp_path: Path):
     dsn = _get_dsn()
     if not dsn:
         pytest.skip("Missing JCE_DATABASE_URL/DATABASE_URL for Postgres integration test")
-
-    from johnnycanencrypt.async_pg_backend import AsyncPgBackend
-    from johnnycanencrypt.utils import DB_UPGRADE_DATE
 
     backend = AsyncPgBackend(root=tmp_path, database_url=dsn)
 

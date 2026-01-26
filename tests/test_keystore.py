@@ -1,12 +1,9 @@
 import datetime
 import shutil
-
-
 import pytest
 import vcr
 from conftest import BASE_TESTSDIR
 from utils import verify_files
-
 import johnnycanencrypt as jce
 import johnnycanencrypt.johnnycanencrypt as rjce
 

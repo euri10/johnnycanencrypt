@@ -1,23 +1,25 @@
 import os
-
+from typing import Any
+from pathlib import Path
 import pytest
+from tests.conftest import BASE_TESTSDIR
+from johnnycanencrypt.async_db.keystore import AsyncKeyStore
+import johnnycanencrypt as jce
 
 
 def _get_dsn() -> str | None:
     return os.getenv("JCE_DATABASE_URL") or os.getenv("DATABASE_URL")
 
+# ...existing code...
 
 @pytest.mark.anyio
-async def test_async_keystore_delete_key_cleans_up(tmp_path, monkeypatch):
+async def test_async_keystore_delete_key_cleans_up(tmp_path: Path, monkeypatch: Any):
     dsn = _get_dsn()
     if not dsn:
         pytest.skip("Missing JCE_DATABASE_URL/DATABASE_URL for Postgres integration test")
 
     monkeypatch.setenv("JCE_DB_BACKEND", "postgres")
     monkeypatch.setenv("JCE_DATABASE_URL", dsn)
-
-    from conftest import BASE_TESTSDIR
-    from johnnycanencrypt.async_keystore import AsyncKeyStore
 
     ks = AsyncKeyStore(tmp_path)
 
@@ -30,23 +32,19 @@ async def test_async_keystore_delete_key_cleans_up(tmp_path, monkeypatch):
     await ks.delete_key(key.fingerprint)
 
     # Now verify it no longer exists
-    import johnnycanencrypt as jce
 
     with pytest.raises(jce.KeyNotFoundError):
         await ks.get_key(key.fingerprint)
 
 
 @pytest.mark.anyio
-async def test_async_keystore_update_password_smoke(tmp_path, monkeypatch):
+async def test_async_keystore_update_password_smoke(tmp_path: Path, monkeypatch: Any):
     dsn = _get_dsn()
     if not dsn:
         pytest.skip("Missing JCE_DATABASE_URL/DATABASE_URL for Postgres integration test")
 
     monkeypatch.setenv("JCE_DB_BACKEND", "postgres")
     monkeypatch.setenv("JCE_DATABASE_URL", dsn)
-
-    from conftest import BASE_TESTSDIR
-    from johnnycanencrypt.async_keystore import AsyncKeyStore
 
     ks = AsyncKeyStore(tmp_path)
 

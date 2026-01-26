@@ -1,5 +1,4 @@
 import re
-
 import johnnycanencrypt.schema as schema
 
 

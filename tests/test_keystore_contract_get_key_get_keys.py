@@ -14,7 +14,6 @@ They use existing fixture keys (pgp_keys.asc) to avoid duplicating parsing logic
 from __future__ import annotations
 
 import os
-
 import pytest
 
 

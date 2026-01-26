@@ -2,7 +2,6 @@
 import pytest
 from conftest import BASE_TESTSDIR
 from utils import _get_cert_data
-
 import johnnycanencrypt.johnnycanencrypt as rjce
 
 NISTP256_PUB = "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEje+CqtHn9yp/vHBahLv01IeqS+6ZnD7ZQ87nAZZU6xPzTk5npdCq6q+mJBNsi/CNcV2H2Y1EuzsP1JylRyYqA= 123456\n"

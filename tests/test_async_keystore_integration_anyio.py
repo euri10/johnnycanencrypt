@@ -1,10 +1,13 @@
 import os
-
+from typing import Any
+from pathlib import Path
 import pytest
+from johnnycanencrypt.async_db.keystore import AsyncKeyStore
 
+# ...existing code...
 
 @pytest.mark.anyio
-async def test_async_keystore_integration_tests_run_with_dsn(tmp_path, monkeypatch):
+async def test_async_keystore_integration_tests_run_with_dsn(tmp_path: Path, monkeypatch: Any):
     """Sanity check: when DSN is available, async tests can run (not just skip)."""
 
     dsn = os.getenv("JCE_DATABASE_URL") or os.getenv("DATABASE_URL")
@@ -14,14 +17,12 @@ async def test_async_keystore_integration_tests_run_with_dsn(tmp_path, monkeypat
     monkeypatch.setenv("JCE_DB_BACKEND", "postgres")
     monkeypatch.setenv("JCE_DATABASE_URL", dsn)
 
-    from johnnycanencrypt.async_keystore import AsyncKeyStore
-
     ks = AsyncKeyStore(tmp_path)
     await ks.ensure_schema_current()
 
 
 @pytest.mark.anyio
-async def test_async_keystore_list_fingerprints_smoke(tmp_path, monkeypatch):
+async def test_async_keystore_list_fingerprints_smoke(tmp_path: Path, monkeypatch: Any):
     """Optional integration smoke test.
 
     Requires a Postgres DSN. Validates that list_fingerprints works on an empty DB.
@@ -34,15 +35,13 @@ async def test_async_keystore_list_fingerprints_smoke(tmp_path, monkeypatch):
     monkeypatch.setenv("JCE_DB_BACKEND", "postgres")
     monkeypatch.setenv("JCE_DATABASE_URL", dsn)
 
-    from johnnycanencrypt.async_keystore import AsyncKeyStore
-
     ks = AsyncKeyStore(tmp_path)
     fps = await ks.list_fingerprints()
     assert fps == []
 
 
 @pytest.mark.anyio
-async def test_async_keystore_save_key_info_roundtrip(tmp_path, monkeypatch):
+async def test_async_keystore_save_key_info_roundtrip(tmp_path: Path, monkeypatch: Any):
     """Integration test for the first async write operation."""
 
     dsn = os.getenv("JCE_DATABASE_URL") or os.getenv("DATABASE_URL")
@@ -51,8 +50,6 @@ async def test_async_keystore_save_key_info_roundtrip(tmp_path, monkeypatch):
 
     monkeypatch.setenv("JCE_DB_BACKEND", "postgres")
     monkeypatch.setenv("JCE_DATABASE_URL", dsn)
-
-    from johnnycanencrypt.async_keystore import AsyncKeyStore
 
     ks = AsyncKeyStore(tmp_path)
 

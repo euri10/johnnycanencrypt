@@ -1,6 +1,9 @@
 import os
-
+from typing import Any
+from pathlib import Path
 import pytest
+from tests.conftest import BASE_TESTSDIR
+from johnnycanencrypt.async_db.keystore import AsyncKeyStore
 
 
 def _get_dsn() -> str | None:
@@ -8,7 +11,7 @@ def _get_dsn() -> str | None:
 
 
 @pytest.mark.anyio
-async def test_async_keystore_import_key_roundtrip(tmp_path, monkeypatch):
+async def test_async_keystore_import_key_roundtrip(tmp_path: Path, monkeypatch: Any):
     dsn = _get_dsn()
     if not dsn:
         pytest.skip("Missing JCE_DATABASE_URL/DATABASE_URL for Postgres integration test")
@@ -16,8 +19,7 @@ async def test_async_keystore_import_key_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("JCE_DB_BACKEND", "postgres")
     monkeypatch.setenv("JCE_DATABASE_URL", dsn)
 
-    from conftest import BASE_TESTSDIR
-    from johnnycanencrypt.async_keystore import AsyncKeyStore
+# ...existing code...
 
     ks = AsyncKeyStore(tmp_path)
 

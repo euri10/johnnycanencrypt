@@ -2,7 +2,6 @@ import os
 
 import pytest
 
-
 def _get_dsn() -> str | None:
     return os.getenv("JCE_DATABASE_URL") or os.getenv("DATABASE_URL")
 
