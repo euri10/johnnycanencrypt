@@ -49,9 +49,12 @@ class AsyncPgBackend(AsyncDbBackend):
                 )
             elif row["upgradedate"] != DB_UPGRADE_DATE:
                 raise RuntimeError(
-                    "Database schema upgrade required (dbupgrade=%r, expected=%r)"
+                    "Database schema upgrade required (dbupgrade=%r, expected=%r). "
+                    "Automatic Postgres migrations are not implemented; please re-initialize the database "
+                    "or migrate data manually."
                     % (row["upgradedate"], DB_UPGRADE_DATE)
                 )
+
         finally:
             await conn.close()
 
