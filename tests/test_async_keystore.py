@@ -9,7 +9,7 @@ def test_async_keystore_requires_postgres_backend(tmp_path, monkeypatch):
 
     monkeypatch.setenv("JCE_DB_BACKEND", "sqlite")
 
-    from johnnycanencrypt.async_keystore import AsyncKeyStore
+    from johnnycanencrypt.async_db.keystore import AsyncKeyStore
 
     with pytest.raises(ValueError, match=r"only supports the postgres backend"):
         AsyncKeyStore(tmp_path)
