@@ -25,6 +25,32 @@ from .utils import _get_cert_data  # noqa: F401
 from .utils import (DB_UPGRADE_DATE, convert_fingerprint, createdb,
                     to_sort_by_expiry)
 
+
+def _connect(db_url: str, db_path: Path):
+    """Return a DB-API 2.0 connection.
+
+    Supported URLs:
+    - sqlite:///absolute/or/relative/path.db
+    - sqlite:///:memory:
+
+    If db_url is empty, defaults to sqlite:///<db_path>.
+
+    This keeps backward compatibility while allowing other backends later.
+    """
+    if not db_url:
+        return sqlite3.connect(db_path)
+
+    if db_url.startswith("sqlite:///"):
+        target = db_url[len("sqlite:///") :]
+        if target == ":memory:":
+            return sqlite3.connect(":memory:")
+        return sqlite3.connect(target)
+
+    raise ValueError(
+        "Unsupported database URL. Only sqlite:///... is supported right now. "
+        "(Planned: allow other backends via SQLAlchemy or another adapter.)"
+    )
+
 # To use for type checking
 StrOrBytesPath = Union[str, bytes, os.PathLike]
 
@@ -133,9 +159,22 @@ class Key:
 
 
 class KeyStore:
-    """Returns `KeyStore` class object, takes the directory path as string."""
+    """Returns `KeyStore` class object.
 
-    def __init__(self, path: StrOrBytesPath) -> None:
+    By default, key metadata is stored in a SQLite database named `jce.db`
+    inside the keystore directory.
+
+    To allow other backends in the future, you can pass a database URL.
+
+    Currently supported:
+    - sqlite:///path/to/jce.db
+    - sqlite:///:memory:
+
+    :param path: directory path of the keystore
+    :param db_url: database URL (optional)
+    """
+
+    def __init__(self, path: StrOrBytesPath, db_url: str = "") -> None:
         if isinstance(path, str):
             fullpath = Path(path).absolute()
         elif isinstance(path, bytes):
@@ -150,8 +189,10 @@ class KeyStore:
             raise OSError(f"The {fullpath} does not exist.")
         self.dbpath: Path = fullpath / "jce.db"
         self.path = fullpath
+        self.db_url = db_url
+
         if not self.dbpath.exists():
-            con = sqlite3.connect(self.dbpath)
+            con = _connect(self.db_url, self.dbpath)
             with con:
                 cursor = con.cursor()
                 cursor.executescript(createdb)
@@ -183,7 +224,7 @@ class KeyStore:
         "Internal: Upgrades the database schema if required"
         SHOULD_WE = False
         existing_records = []
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         con.row_factory = sqlite3.Row
         # First we will check if this db schema is old or not
         with con:
@@ -212,7 +253,7 @@ class KeyStore:
             raise RuntimeError(
                 f"{self.dbpath} already exists, please remove and then try again."
             )
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         con.row_factory = sqlite3.Row
         with con:
             cursor = con.cursor()
@@ -241,7 +282,7 @@ class KeyStore:
                 creationtime,
                 othervalues,
             )
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         con.row_factory = sqlite3.Row
         with con:
             cursor = con.cursor()
@@ -261,7 +302,7 @@ class KeyStore:
     def update_password(self, key: Key, password: str, newpassword: str) -> Key:
         """Updates the password of the given key and saves to the database"""
         cert = rjce.update_password(key.keyvalue, password, newpassword)
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         con.row_factory = sqlite3.Row
         with con:
             cursor = con.cursor()
@@ -362,7 +403,7 @@ class KeyStore:
         "Saves all information given to the SQLite3 database"
         etime = str(expirationtime.timestamp()) if expirationtime else ""
         ctime = str(creationtime.timestamp()) if creationtime else ""
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         con.row_factory = sqlite3.Row
         ktype = 1 if keytype else 0
         subkeys = othervalues["subkeys"]
@@ -514,7 +555,7 @@ class KeyStore:
         _, _, _, _, _, othervalues = rjce.parse_cert_bytes(newcert)
         newsubkeys = othervalues["subkeys"]
         # Now save the key
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         with con:
             cursor = con.cursor()
             # First let us update the actual keyvalue
@@ -573,7 +614,7 @@ class KeyStore:
             etime_str = str(expirytime.timestamp())
         else:
             etime_str = None
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         with con:
             cursor = con.cursor()
             cursor.execute(sql, (etime_str, fingerprint))
@@ -611,7 +652,7 @@ class KeyStore:
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "wb") as fobj:
             fobj.write(newcert)
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         with con:
             cursor = con.cursor()
             # First let us update the actual keyvalue
@@ -680,7 +721,7 @@ class KeyStore:
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "wb") as fobj:
             fobj.write(newcert)
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         with con:
             cursor = con.cursor()
             # First let us update the actual keyvalue
@@ -735,7 +776,7 @@ class KeyStore:
         "Returns tuple of (number_of_public, number_of_secret_keys)"
         public = 0
         secret = 0
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         with con:
             cursor = con.cursor()
             cursor.execute("SELECT id, fingerprint, keytype from keys")
@@ -755,7 +796,7 @@ class KeyStore:
         return self._internal_get_key(fingerprint)[0]
 
     def _internal_get_key(self, fingerprint="", key_id=None, allkeys=False):
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         con.row_factory = sqlite3.Row
         with con:
             cursor = con.cursor()
@@ -774,7 +815,7 @@ class KeyStore:
     def get_keys_by_keyid(self, keyid: str):
         "Returns a list of keys for a given KeyID"
         # TODO: This has bad SQL, we can improve in future.
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         con.row_factory = sqlite3.Row
         list_of_db_ids = set()
         with con:
@@ -953,7 +994,7 @@ class KeyStore:
         results = []
         unique_fingerprints = {}
         # TODO: Now let us search
-        con = sqlite3.connect(self.dbpath)
+        con = _connect(self.db_url, self.dbpath)
         con.row_factory = sqlite3.Row
         with con:
             cursor = con.cursor()
@@ -1578,7 +1619,7 @@ class KeyStore:
         data = rjce.get_card_details()
         if not data["serial_number"]:
             return "No data found."
-        con = sqlite3.connect(self.dbpath)
+            con = _connect(self.db_url, self.dbpath)
         con.row_factory = sqlite3.Row
         with con:
             cursor = con.cursor()
