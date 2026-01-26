@@ -2,9 +2,8 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import os
-import shutil
-import sqlite3
 import urllib.parse
+
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -22,8 +21,9 @@ from .johnnycanencrypt import (CryptoError, Johnny, TouchMode, create_key,
                                encrypt_filehandler_to_file, get_pub_key,
                                merge_keys, parse_cert_bytes, parse_cert_file)
 from .utils import _get_cert_data  # noqa: F401
-from .utils import (DB_UPGRADE_DATE, convert_fingerprint, createdb,
-                    to_sort_by_expiry)
+from .utils import DB_UPGRADE_DATE, convert_fingerprint, createdb, to_sort_by_expiry
+
+
 
 # To use for type checking
 StrOrBytesPath = Union[str, bytes, os.PathLike]
@@ -148,19 +148,20 @@ class KeyStore:
 
         if not fullpath.exists():
             raise OSError(f"The {fullpath} does not exist.")
-        self.dbpath: Path = fullpath / "jce.db"
         self.path = fullpath
-        if not self.dbpath.exists():
-            con = sqlite3.connect(self.dbpath)
-            with con:
-                cursor = con.cursor()
-                cursor.executescript(createdb)
-                # we have to insert the date when this database schema was generated
-                cursor.execute(
-                    "INSERT INTO dbupgrade (upgradedate) values (?)",
-                    (DB_UPGRADE_DATE,),
-                )
-        else:
+
+        # Database backend (currently SQLite).
+        #
+        # NOTE: `_db` is an internal detail for now; tests currently use it.
+        from .db import DbConfig, SqliteBackend
+
+        self._db = SqliteBackend(DbConfig(root=self.path))
+
+        self.dbpath: Path = self._db.dbpath
+
+        # Initialize (or verify) the DB.
+        self._db.initialize_if_missing()
+        if self.dbpath.exists():
             # Now we have db already
             # verify if it has the same database schema
             self.upgrade_if_required()
@@ -168,101 +169,28 @@ class KeyStore:
     def __str__(self) -> str:
         return f"<KeyStore dbpath={self.dbpath}>"
 
+
     def upgrade_if_required(self):
         "Upgrades the database schema if required"
-        oldpath = self._upgrade_if_required()
-        if oldpath is None:
-            return
-        os.unlink(oldpath)
-        # Now let us rename the file
-        shutil.copy(self.dbpath, oldpath)
-        os.unlink(self.dbpath)
-        self.dbpath = oldpath
 
-    def _upgrade_if_required(self):
-        "Internal: Upgrades the database schema if required"
-        SHOULD_WE = False
-        existing_records = []
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
-        # First we will check if this db schema is old or not
-        with con:
-            cursor = con.cursor()
-            sql = "SELECT * from dbupgrade"
-            try:
-                cursor.execute(sql)
-                fromdb = cursor.fetchone()
-                if fromdb["upgradedate"] < DB_UPGRADE_DATE:  # Means old db schema
-                    SHOULD_WE = True
-            except sqlite3.OperationalError:  # Means the table is not there.
-                SHOULD_WE = True
-            # Now check if we should upgrade if yes, then do this.
-            if SHOULD_WE:
-                # First read all the existing keys
-                cursor.execute("SELECT * from KEYS")
-                existing_records = cursor.fetchall()
-            else:
-                return
-        con.close()
-        # Temporay db setup
-        oldpath = self.dbpath
-        self.dbpath = self.path / "jce_upgrade.db"
-        if self.dbpath.exists():  # Means the upgrade db already exist.
-            # Unrecoverable error
-            raise RuntimeError(
-                f"{self.dbpath} already exists, please remove and then try again."
-            )
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
-        with con:
-            cursor = con.cursor()
-            cursor.executescript(createdb)
-            # we have to insert the date when this database schema was generated
-            cursor.execute(
-                "INSERT INTO dbupgrade (upgradedate) values (?)", (DB_UPGRADE_DATE,)
-            )
-        con.close()
-        # now let us insert our existing data
-        for row in existing_records:
-            (
-                uids,
-                fingerprint,
-                keytype,
-                expirationtime,
-                creationtime,
-                othervalues,
-            ) = parse_cert_bytes(row["keyvalue"])
-            self._save_key_info_to_db(
-                row["keyvalue"],
-                uids,
-                fingerprint,
-                keytype,
-                expirationtime,
-                creationtime,
-                othervalues,
-            )
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
-        with con:
-            cursor = con.cursor()
-            for row in existing_records:
-                oncard = row["oncard"]
-                # The following because this column may not exist at all
-                try:
-                    primary_on_card = row["primary_on_card"]
-                except IndexError:
-                    primary_on_card = ""
-                fingerprint = row["fingerprint"]
-                sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
-                cursor.execute(sql, (oncard, primary_on_card, fingerprint))
-        con.close()
-        return oldpath
+        # Backend-specific implementation. For SQLite, the backend owns the file-swap
+        # upgrade procedure.
+        self._db.upgrade_if_required_with(
+            save_key_info_to_db=self._save_key_info_to_db,
+            parse_cert_bytes=parse_cert_bytes,
+            db_upgrade_date=DB_UPGRADE_DATE,
+            createdb_sql=createdb,
+        )
+
+        # The backend may have performed an in-place swap; refresh our view.
+        self.dbpath = self._db.dbpath
 
     def update_password(self, key: Key, password: str, newpassword: str) -> Key:
+
         """Updates the password of the given key and saves to the database"""
         cert = rjce.update_password(key.keyvalue, password, newpassword)
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
+        con = self._db.connect()
+
         with con:
             cursor = con.cursor()
             sql = "UPDATE keys set keyvalue=? where fingerprint=?"
@@ -359,11 +287,12 @@ class KeyStore:
         creationtime,
         othervalues,
     ):
-        "Saves all information given to the SQLite3 database"
+        "Saves all information given to the keystore database backend"
+
         etime = str(expirationtime.timestamp()) if expirationtime else ""
         ctime = str(creationtime.timestamp()) if creationtime else ""
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
+        con = self._db.connect()
+
         ktype = 1 if keytype else 0
         subkeys = othervalues["subkeys"]
         mainkeyid = othervalues["keyid"]
@@ -514,11 +443,12 @@ class KeyStore:
         _, _, _, _, _, othervalues = rjce.parse_cert_bytes(newcert)
         newsubkeys = othervalues["subkeys"]
         # Now save the key
-        con = sqlite3.connect(self.dbpath)
+        con = self._db.connect()
         with con:
             cursor = con.cursor()
             # First let us update the actual keyvalue
             sql = "UPDATE keys set keyvalue=? where fingerprint=?"
+
             cursor.execute(sql, (newcert, key.fingerprint))
             # Now we need the key_id from the database table
             cursor.execute(
@@ -573,10 +503,11 @@ class KeyStore:
             etime_str = str(expirytime.timestamp())
         else:
             etime_str = None
-        con = sqlite3.connect(self.dbpath)
+        con = self._db.connect()
         with con:
             cursor = con.cursor()
             cursor.execute(sql, (etime_str, fingerprint))
+
         return self.get_key(fingerprint)
 
     def add_userid(self, key: Key, userid: str, password: str) -> Key:
@@ -611,11 +542,12 @@ class KeyStore:
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "wb") as fobj:
             fobj.write(newcert)
-        con = sqlite3.connect(self.dbpath)
+        con = self._db.connect()
         with con:
             cursor = con.cursor()
             # First let us update the actual keyvalue
             sql = "UPDATE keys set keyvalue=? where fingerprint=?"
+
             cursor.execute(sql, (newcert, key.fingerprint))
             # Now we need the key_id from the database table
             cursor.execute(
@@ -680,11 +612,12 @@ class KeyStore:
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "wb") as fobj:
             fobj.write(newcert)
-        con = sqlite3.connect(self.dbpath)
+        con = self._db.connect()
         with con:
             cursor = con.cursor()
             # First let us update the actual keyvalue
             sql = "UPDATE keys set keyvalue=? where fingerprint=?"
+
             cursor.execute(sql, (newcert, key.fingerprint))
             sql = "SELECT id FROM uidvalues WHERE key_id=(SELECT id FROM keys where fingerprint=?) AND value=?"
             # Now loop through the new userids and find the new one
@@ -735,10 +668,11 @@ class KeyStore:
         "Returns tuple of (number_of_public, number_of_secret_keys)"
         public = 0
         secret = 0
-        con = sqlite3.connect(self.dbpath)
+        con = self._db.connect()
         with con:
             cursor = con.cursor()
             cursor.execute("SELECT id, fingerprint, keytype from keys")
+
             rows = cursor.fetchall()
             for row in rows:
                 if row[2]:
@@ -755,8 +689,8 @@ class KeyStore:
         return self._internal_get_key(fingerprint)[0]
 
     def _internal_get_key(self, fingerprint="", key_id=None, allkeys=False):
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
+        con = self._db.connect()
+
         with con:
             cursor = con.cursor()
             if fingerprint:
@@ -774,8 +708,8 @@ class KeyStore:
     def get_keys_by_keyid(self, keyid: str):
         "Returns a list of keys for a given KeyID"
         # TODO: This has bad SQL, we can improve in future.
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
+        con = self._db.connect()
+
         list_of_db_ids = set()
         with con:
             cursor = con.cursor()
@@ -953,8 +887,8 @@ class KeyStore:
         results = []
         unique_fingerprints = {}
         # TODO: Now let us search
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
+        con = self._db.connect()
+
         with con:
             cursor = con.cursor()
             if qtype == "value":
@@ -1076,8 +1010,8 @@ class KeyStore:
             raise KeyNotFoundError(
                 "The key for the given fingerprint={fingerprint} is not found in the keystore"
             )
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
+        con = self._db.connect()
+
         with con:
             cursor = con.cursor()
             sql = "SELECT id from keys where fingerprint=?"
@@ -1578,8 +1512,8 @@ class KeyStore:
         data = rjce.get_card_details()
         if not data["serial_number"]:
             return "No data found."
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
+        con = self._db.connect()
+
         with con:
             cursor = con.cursor()
             # First let us check if a key already exists

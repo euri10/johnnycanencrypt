@@ -1,6 +1,6 @@
 import datetime
 import shutil
-import sqlite3
+
 
 import pytest
 import vcr
@@ -171,8 +171,8 @@ def test_key_deletion_cleanup(tmp_path):
     ks = jce.KeyStore(tmp_path)
     ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
     ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    con = sqlite3.connect(ks.dbpath)
-    con.row_factory = sqlite3.Row
+    con = ks._db.connect()
+
     with con:
         cursor = con.cursor()
         # Verify all subkeys should be deleted
@@ -599,8 +599,8 @@ def test_ks_upgrade(tmp_path):
     shutil.copy(BASE_TESTSDIR / "files" / "store" / "oldjce.db", tmp_path / "jce.db")
 
     ks = jce.KeyStore(tmp_path)
-    con = sqlite3.connect(ks.dbpath)
-    con.row_factory = sqlite3.Row
+    con = ks._db.connect()
+
     # First we will check if this db schema is old or not
     with con:
         cursor = con.cursor()
