@@ -139,4 +139,4 @@ def test_verify_bytes_detached_must_fail():
 def test_sign_detached_fail():
     j = jce.Johnny(_get_cert_data(PUBLIC_PATH))
     with pytest.raises(jce.CryptoError):
-        signature = j.sign_bytes_detached(DATA.encode("utf-8"), "redhat")
+        j.sign_bytes_detached(DATA.encode("utf-8"), "redhat")

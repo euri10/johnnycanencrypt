@@ -11,12 +11,12 @@ DATA = "Kushal loves 🦀"
 
 
 def test_correct_keystore_path():
-    ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
+    jce.KeyStore(BASE_TESTSDIR / "files/store")
 
 
 def test_nonexisting_keystore_path():
     with pytest.raises(OSError):
-        ks = jce.KeyStore(BASE_TESTSDIR / "files2/")
+        jce.KeyStore(BASE_TESTSDIR / "files2/")
 
 
 def test_str(tmp_path):
@@ -28,10 +28,10 @@ def test_str(tmp_path):
 def test_no_such_key():
     with pytest.raises(jce.KeyNotFoundError):
         ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
-        key = ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
+        ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
     with pytest.raises(jce.KeyNotFoundError):
         ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
-        key = ks.get_key(None)
+        ks.get_key(None)
 
 
 def test_create_primary_key_with_encryption(tmp_path):
@@ -43,7 +43,7 @@ def test_create_primary_key_with_encryption(tmp_path):
         whichkeys=1,
         can_primary_sign=True,
     )
-    assert newkey.can_primary_sign == True
+    assert newkey.can_primary_sign
 
 
 def test_key_cipher_details():
@@ -82,7 +82,7 @@ def test_keystore_lifecycle(tmp_path):
     assert key_via_fingerprint == keys_via_emails[0]
 
     # Also verify that kushal's primary key can sign
-    assert key_via_fingerprint.can_primary_sign == True
+    assert key_via_fingerprint.can_primary_sign
 
     # Now verify name cache
     key_via_fingerprint = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
@@ -138,7 +138,7 @@ def test_key_password_change(tmp_path):
     ks = jce.KeyStore(tmp_path)
     k = ks.import_key(BASE_TESTSDIR / "files" / "store" / "secret.asc")
     k2 = ks.update_password(k, "redhat", "byebye")
-    data = ks.sign_detached(k2, b"hello", "byebye")
+    ks.sign_detached(k2, b"hello", "byebye")
 
 
 def test_key_deletion(tmp_path):
@@ -321,7 +321,7 @@ def test_ks_encrypt_decrypt_file_multiple_recipients(tmp_path):
     ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store")
     key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    encrypted = ks.encrypt_file([key1, key2], str(inputfile), str(output))
+    ks.encrypt_file([key1, key2], str(inputfile), str(output))
     secret_key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     ks.decrypt_file(secret_key1, str(output), str(decrypted_output), password="redhat")
     verify_files(inputfile, decrypted_output)
@@ -520,7 +520,7 @@ def test_add_and_revoke_userid(tmp_path):
     assert key2.keytype == jce.KeyType.SECRET
     # because at first all user ids are valid
     for uid in key2.uids:
-        assert uid["revoked"] == False
+        assert not uid["revoked"]
 
     # now let us reove the new user id
     key3 = ks.revoke_userid(key2, "Off Spinner <spin@example.com>", "redhat")
@@ -530,9 +530,9 @@ def test_add_and_revoke_userid(tmp_path):
     assert key3.keytype == jce.KeyType.SECRET
     for uid in key3.uids:
         if uid["value"] == "Off Spinner <spin@example.com>":
-            assert uid["revoked"] == True
+            assert uid["revoked"]
         else:
-            assert uid["revoked"] == False
+            assert not uid["revoked"]
 
 
 def test_add_userid_fails_for_public(tmp_path):
@@ -544,7 +544,7 @@ def test_add_userid_fails_for_public(tmp_path):
 
     # now add a new userid
     with pytest.raises(ValueError):
-        key2 = ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
+        ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
 
 
 def test_update_subkey_expiry_time():
@@ -615,11 +615,11 @@ def test_ks_upgrade_failure(tmp_path):
         BASE_TESTSDIR / "files" / "store" / "oldjce.db", tmp_path / "jce_upgrade.db"
     )
     with pytest.raises(RuntimeError):
-        ks = jce.KeyStore(tmp_path)
+        jce.KeyStore(tmp_path)
 
 
 def test_get_encrypted_for():
-    ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store/")
+    jce.KeyStore(BASE_TESTSDIR / "files" / "store/")
     keyids = rjce.file_encrypted_for(
         str(BASE_TESTSDIR / "files" / "double_recipient.asc")
     )
@@ -637,9 +637,9 @@ def test_available_subkeys_for_no_expiration():
     fingerprint = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     key = ks.get_key(fingerprint)
     e, s, a = key.available_subkeys()
-    assert e == True
-    assert s == True
-    assert a == False
+    assert e
+    assert s
+    assert not a
 
 
 def test_available_subkeys_for_expired(tmp_path):
@@ -648,9 +648,9 @@ def test_available_subkeys_for_expired(tmp_path):
     ks.import_key(BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc")
     key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
     e, s, a = key.available_subkeys()
-    assert e == False
-    assert s == False
-    assert a == False
+    assert not e
+    assert not s
+    assert not a
 
 
 @vcr.use_cassette(str(BASE_TESTSDIR / "files" / "test_fetch_key_by_fingerprint.yml"))
@@ -669,7 +669,7 @@ def test_fetch_key_by_fingerprint(tmp_path):
 def test_fetch_nonexistingkey_by_fingerprint(tmp_path):
     ks = jce.KeyStore(tmp_path)
     with pytest.raises(jce.KeyNotFoundError):
-        key = ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298291")
+        ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298291")
 
 
 @vcr.use_cassette(str(BASE_TESTSDIR / "files" / "test_fetch_key_by_email.yml"))

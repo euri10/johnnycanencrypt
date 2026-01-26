@@ -128,7 +128,7 @@ def test_decrypt_file_from_gpg(tmp_path):
     decrypted_output = tmp_path / "gpg_encrytped.txt"
 
     # Now encrypt and then decrypt
-    j = jce.Johnny(_get_cert_data(PUBLIC_KEY))
+    jce.Johnny(_get_cert_data(PUBLIC_KEY))
     jp = jce.Johnny(_get_cert_data(SECRET_KEY))
     assert jp.decrypt_file(
         str(encrypted_file).encode("utf-8"), str(decrypted_output).encode("utf-8"), "redhat"
