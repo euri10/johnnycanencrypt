@@ -39,8 +39,15 @@ format = "md"
 
 [dependency-groups]
 dev = [
-    "maturin>=1.11.5",
-    "maturin-import-hook>=0.3.0",
-    "mypy>=1.19.1",
-    "pytest>=8.4.2",
+    "pytest",
+    "setuptools",
+    "wheel",
+    "mypy",
+    "httpx",
+    "vcrpy",
+    "scriv",
+    "tzdata",
+    "maturin",
+    "asyncpg",
+    "pytest-anyio",
 ]
