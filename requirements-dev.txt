@@ -7,3 +7,5 @@ vcrpy
 scriv
 tzdata
 maturin
+asyncpg
+
