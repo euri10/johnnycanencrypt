@@ -51,6 +51,30 @@ maturin build --release
 - This repo uses `uv` in CI (`.github/workflows/ci_pr.yml`), and includes `uv.lock`.
 - No `ruff.toml`/`.ruff.toml`, `pytest.ini`, `tox.ini`, `.editorconfig`, or `.pre-commit-config.yaml` were found at the repo root during discovery.
 
+## Quality gates (tests / typecheck / build)
+
+```bash
+# Tests (unit + integration; CI also runs Postgres-backed integration)
+pytest -q
+
+# Type-checking
+mypy johnnycanencrypt
+
+# Build/install local dev extension (Rust -> Python)
+maturin develop
+
+# Build release artifacts (wheel/sdist)
+maturin build --release
+```
+
+CI reference: `.github/workflows/ci_pr.yml` (uses `uv` to create venv and run `pytest`).
+
+## Suggestions (optional)
+
+- Add a `pyproject.toml` `[tool.mypy]` section (or keep `mypy.ini`, but document one source of truth).
+- Consider adding a linter + formatter setup (e.g. Ruff) and wiring it into CI.
+- Consider a simple task runner (`Makefile` at repo root, `justfile`, or `python -m ...`) so contributors have a single entrypoint for `fmt/lint/test/build`.
+
 ## Repo patterns and practices (observed)
 
 - **Folder layout**
