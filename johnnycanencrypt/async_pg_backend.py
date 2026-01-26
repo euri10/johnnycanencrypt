@@ -35,7 +35,6 @@ class AsyncPgBackend(AsyncDbBackend):
         finally:
             await conn.close()
 
-    async def ensure_schema_current(self) -> None:
         from .utils import DB_UPGRADE_DATE
 
         await self.initialize_schema()
@@ -101,5 +100,58 @@ class AsyncPgBackend(AsyncDbBackend):
                 oncard,
                 primary_on_card,
             )
+        finally:
+            await conn.close()
+
+
+
+    async def get_key_row_by_fingerprint(self, fingerprint: str) -> dict | None:
+        """Return the raw `keys` row for a fingerprint.
+
+        This is a building block for higher-level APIs that reconstruct the full
+        Key object (uids/subkeys/certs). For now we only expose the minimal row.
+        """
+
+        await self.ensure_schema_current()
+
+        conn = await self.connect()
+        try:
+            row = await conn.fetchrow(
+                "SELECT * FROM keys WHERE fingerprint=$1",
+                fingerprint,
+            )
+            return dict(row) if row is not None else None
+        finally:
+            await conn.close()
+
+    async def get_key_ids_by_query(
+        self, *, qvalue: str, qtype: str = "email"
+    ) -> list[int]:
+        """Return key IDs matching a query (email/value/name/uri).
+
+        Mirrors the sync KeyStore.get_keys() query semantics, but returns DB ids.
+        Higher-level code can then fetch full key objects.
+        """
+
+        if qtype not in ["email", "value", "uri", "name"]:
+            raise ValueError("qtype must be one of: email, value, name, uri")
+
+        await self.ensure_schema_current()
+
+        table_by_type = {
+            "value": "uidvalues",
+            "email": "uidemails",
+            "name": "uidnames",
+            "uri": "uiduris",
+        }
+        table = table_by_type[qtype]
+
+        conn = await self.connect()
+        try:
+            rows = await conn.fetch(
+                f"SELECT DISTINCT key_id FROM {table} WHERE value=$1 ORDER BY key_id",
+                qvalue,
+            )
+            return [int(r["key_id"]) for r in rows]
         finally:
             await conn.close()
