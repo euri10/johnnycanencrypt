@@ -94,6 +94,54 @@ class AsyncKeyStore:
         finally:
             await conn.close()
 
+    async def save_key_info(
+        self,
+        *,
+        keyvalue: bytes,
+        fingerprint: str,
+        keyid: str,
+        keytype: int,
+        expiration: str = "",
+        creation: str = "",
+        can_primary_sign: int = 0,
+        oncard: str = "",
+        primary_on_card: str = "",
+    ) -> None:
+        """Insert a minimal key row into the database.
+
+        This mirrors the sync KeyStore pattern where parsed cert fields are persisted.
+
+        Notes:
+        - This is intentionally minimal for now: only the `keys` table is written.
+        - The full schema (subkeys/uids/certs) will be added incrementally.
+        """
+
+        await self.ensure_schema_current()
+
+        conn = await self.connect()
+        try:
+            await conn.execute(
+                """
+                INSERT INTO keys (
+                    keyvalue, fingerprint, keyid, keytype, expiration, creation,
+                    can_primary_sign, oncard, primary_on_card
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                ON CONFLICT DO NOTHING
+                """,
+                keyvalue,
+                fingerprint,
+                keyid,
+                keytype,
+                expiration,
+                creation,
+                can_primary_sign,
+                oncard,
+                primary_on_card,
+            )
+        finally:
+            await conn.close()
+
+
 
     async def ensure_schema_current(self) -> None:
         """Ensure the schema exists and `dbupgrade` has the current version row."""

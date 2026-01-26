@@ -23,3 +23,9 @@ def test_postgres_schema_has_all_tables():
 def test_postgres_schema_uses_bytea_for_keyvalue():
     ddl = schema.POSTGRES_SCHEMA.lower()
     assert re.search(r"keyvalue\s+bytea\s+not\s+null", ddl)
+
+
+def test_postgres_schema_keys_fingerprint_unique():
+    ddl = schema.POSTGRES_SCHEMA.lower()
+    assert re.search(r"fingerprint\s+text\s+not\s+null\s+unique", ddl)
+

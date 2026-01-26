@@ -16,7 +16,8 @@ POSTGRES_SCHEMA = """
 CREATE TABLE IF NOT EXISTS keys (
     id BIGSERIAL PRIMARY KEY,
     keyvalue BYTEA NOT NULL,
-    fingerprint TEXT NOT NULL,
+    fingerprint TEXT NOT NULL UNIQUE,
+
     keyid TEXT NOT NULL,
     expiration TEXT,
     creation TEXT,
