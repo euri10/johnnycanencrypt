@@ -41,26 +41,39 @@ def load_db_config(root: Path) -> DbConfig:
     """Load DB config from environment.
 
     Defaults preserve existing behavior (sqlite file under `root`).
+
+    Supported variables:
+    - `JCE_DB_BACKEND`: sqlite | postgres | postgresql (default: sqlite)
+    - `JCE_DATABASE_URL`: preferred DSN/URL for postgres
+    - `DATABASE_URL`: fallback DSN/URL for postgres (common convention)
     """
 
-    backend = ("%s" % (os.getenv("JCE_DB_BACKEND") or "sqlite")).strip().lower()
-    if backend not in {"sqlite", "postgres"}:
+    backend_raw = (os.getenv("JCE_DB_BACKEND") or "sqlite").strip().lower()
+    backend_aliases = {
+        "sqlite": "sqlite",
+        "postgres": "postgres",
+        "postgresql": "postgres",
+    }
+    backend = backend_aliases.get(backend_raw)
+    if backend is None:
         raise ValueError(
-            "Invalid JCE_DB_BACKEND. Expected 'sqlite' or 'postgres', got: %r" % backend
+            "Invalid JCE_DB_BACKEND. Expected 'sqlite', 'postgres', or 'postgresql', got: %r"
+            % backend_raw
         )
 
-    database_url = os.getenv("JCE_DATABASE_URL")
+    database_url = os.getenv("JCE_DATABASE_URL") or os.getenv("DATABASE_URL")
 
     if backend == "postgres" and not database_url:
         raise ValueError(
-            "JCE_DATABASE_URL is required when JCE_DB_BACKEND='postgres'"
+            "JCE_DATABASE_URL (or DATABASE_URL) is required when JCE_DB_BACKEND is postgres"
         )
 
     return DbConfig(
         root=root,
-        backend=backend,  # type: ignore[arg-type]
+        backend=backend,
         database_url=database_url,
     )
+
 
 
 
