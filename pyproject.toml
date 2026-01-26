@@ -11,7 +11,6 @@ classifiers = [
   "Programming Language :: Rust",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -21,7 +20,7 @@ classifiers = [
 ]
 authors = [{name="Kushal Das", email="mail@kushaldas.in"}]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "httpx",
     "tzdata",
@@ -31,6 +30,15 @@ dependencies = [
 "Homepage" = "https://github.com/kushaldas/johnnycanencrypt"
 "Bug Tracker" = "https://github.com/kushaldas/johnnycanencrypt/issues"
 
+[tool.uv]
+package = false
+
 [tool.scriv]
 version = "literal: pyproject.toml: project.version"
 format = "md"
+
+[dependency-groups]
+dev = [
+    "maturin>=1.11.5",
+    "maturin-import-hook>=0.3.0",
+]

@@ -23,19 +23,22 @@ jobs:
               with:
                 targets: ${{ matrix.platform.rust-target }}
 
-            - name: Install build dependencies
+            - name: Install uv
               shell: bash
-              env:
-                PYTHON: ${{ matrix.python-version }}
+              run: pip install uv
+
+            - name: Set up environment with uv
+              shell: bash
               run: |
-                python -m pip install -U pip setuptools
-                python -m pip install -r requirements-dev.txt
+                uv sync
+                uv run -m maturin_import_hook site install
+                uv run -m maturin develop
 
             - name: Build wheel
               shell: bash
               env:
                 PYTHON: ${{ matrix.python-version }}
-              run: python setup.py bdist_wheel
+              run: maturin build --release --interpreter python
 
             - name: Upload Wheels
               uses: actions/upload-artifact@v3

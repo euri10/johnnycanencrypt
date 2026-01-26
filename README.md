@@ -7,7 +7,13 @@ It uses amazing [sequoia-pgp](https://sequoia-pgp.org/) library for the actual O
 
 You can also use Yubikeys for the private key operations using this module.
 
-## How to build?
+# How to build?
+
+## Prerequisites
+- Install [uv](https://github.com/astral-sh/uv):
+  - With pipx: `pipx install uv`
+  - Or see uv's documentation for other methods
+- Install [Rustup toolchain](https://rustup.rs) for your user.
 
 First install [Rustup toolchain](https://rustup.rs) for your user.
 
@@ -25,6 +31,16 @@ sudo apt install -y python3-dev libnettle8 nettle-dev libhogweed6 python3-pip py
 ```
 
 
+```
+# Recommended: use uv for setup and development
+uv sync
+uv run -m maturin_import_hook site install
+maturin develop
+```
+
+After this, you can simply import the package in Python and the Rust extension will be rebuilt automatically if needed, thanks to the maturin import hook.
+
+Legacy setup (not recommended):
 ```
 python3 -m venv .venv
 source .venv/bin/activate

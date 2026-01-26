@@ -43,17 +43,15 @@ jobs:
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
 
-      - name: Set up venv
+      - name: Set up environment with uv
         run: |
-          uv venv
-          source .venv/bin/activate
-          uv pip install -r requirements-dev.txt
-          uv pip install -e .
+          uv sync
+          uv run -m maturin_import_hook site install
+          uv run -m maturin develop
 
       - name: Run tests (includes Postgres integration)
         run: |
-          source .venv/bin/activate
-          pytest -q
+          uv run -m pytest -q
 
 
   manylinux_x86_64:
