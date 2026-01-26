@@ -21,7 +21,7 @@ from typing import Literal, Protocol, Optional
 
 @dataclass(frozen=True)
 class DbConfig:
-    """Configuration for the keystore database.
+    """Configuration for the keystore database (parity with AsyncDbConfig).
 
     `KeyStore` is directory-based, but the database backend can be selected.
 
@@ -78,22 +78,19 @@ def load_db_config(root: Path) -> DbConfig:
 
 
 class DbBackend(Protocol):
-    """DB backend contract required by KeyStore.
+    """DB backend contract required by KeyStore (parity with AsyncDbBackend).
 
     This is deliberately minimal and mirrors how KeyStore uses sqlite3 today.
     """
 
+    def connect(self):
+        """Return a DB-API compatible connection (context-manageable, parity with AsyncDbBackend.connect)."""
+
     def initialize_if_missing(self) -> None:
-        """Create schema and write dbupgrade row if DB doesn't exist yet."""
+        """Create schema and write dbupgrade row if DB doesn't exist yet (parity with AsyncDbBackend.initialize_schema)."""
 
     def upgrade_if_required(self) -> None:
-        """Migrate/upgrade schema if the existing DB is older than current."""
-
-    def connect(self):
-        """Return a DB-API compatible connection (context-manageable).
-
-        For SQLite, this is a `sqlite3.Connection`, where `row_factory` is set to `sqlite3.Row`.
-        """
+        """Migrate/upgrade schema if the existing DB is older than current (parity with AsyncDbBackend.ensure_schema_current)."""
 
 
 
@@ -120,7 +117,7 @@ class SqliteBackend:
         return con
 
     def initialize_if_missing(self) -> None:
-        from .utils import DB_UPGRADE_DATE, createdb
+        from ..utils import DB_UPGRADE_DATE, createdb
 
         if self.dbpath.exists():
             return

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .async_db import AsyncDbBackend
-from .db import DbConfig
+from .backend import AsyncDbBackend
+from ..db.backend import DbConfig
 
 
 class AsyncPgBackend(AsyncDbBackend):
