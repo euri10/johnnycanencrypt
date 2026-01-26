@@ -66,22 +66,38 @@ class AsyncKeyStore:
         """Initialize schema on a fresh Postgres database.
 
         This is idempotent (uses CREATE TABLE IF NOT EXISTS).
+
+        For post-init version handling, see `ensure_schema_current()`.
         """
 
         from .schema import POSTGRES_SCHEMA
-        from .utils import DB_UPGRADE_DATE
 
         conn = await self.connect()
         try:
-            # Run schema DDL.
             await conn.execute(POSTGRES_SCHEMA)
+        finally:
+            await conn.close()
 
-            # Ensure dbupgrade has a row.
-            # Keep semantics similar to sqlite: it stores the current schema date.
+    async def ensure_schema_current(self) -> None:
+        """Ensure the schema exists and `dbupgrade` has the current version row."""
+
+        from .utils import DB_UPGRADE_DATE
+
+        await self.initialize_schema()
+
+        conn = await self.connect()
+        try:
             row = await conn.fetchrow("SELECT upgradedate FROM dbupgrade LIMIT 1")
             if row is None:
                 await conn.execute(
                     "INSERT INTO dbupgrade (upgradedate) VALUES ($1)", DB_UPGRADE_DATE
                 )
+            elif row["upgradedate"] != DB_UPGRADE_DATE:
+                # Placeholder for future migrations.
+                raise RuntimeError(
+                    "Database schema upgrade required (dbupgrade=%r, expected=%r)"
+                    % (row["upgradedate"], DB_UPGRADE_DATE)
+                )
         finally:
             await conn.close()
+

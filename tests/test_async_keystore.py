@@ -39,17 +39,20 @@ def test_async_keystore_can_init_schema_with_postgres(tmp_path, monkeypatch):
     import asyncio
 
     async def _run():
-        await ks.initialize_schema()
+        await ks.ensure_schema_current()
 
-        # Basic smoke: dbupgrade must exist and have a row.
+        # Basic smoke: dbupgrade must exist and have the expected schema date.
+        from johnnycanencrypt.utils import DB_UPGRADE_DATE
+
         conn = await ks.connect()
         try:
             row = await conn.fetchrow("SELECT upgradedate FROM dbupgrade LIMIT 1")
             assert row is not None
-            assert row["upgradedate"]
+            assert row["upgradedate"] == DB_UPGRADE_DATE
         finally:
             await conn.close()
 
     asyncio.run(_run())
+
 
 
