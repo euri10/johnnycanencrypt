@@ -494,36 +494,51 @@ class AsyncPgBackend(AsyncDbBackend):
 
         return (await self._build_key_list(rows))[0]
 
-    async def get_keys(self, qvalue: str, qtype: str = "email") -> list["Key"]:
-        if qtype not in ["email", "value", "uri", "name"]:
-            raise ValueError("We need at least one of the email/name/value/uri.")
+
+
+    async def update_keyvalue(self, *, fingerprint: str, keyvalue: bytes) -> None:
+        """Update stored key material for an existing key."""
 
         await self.ensure_schema_current()
 
-        table_by_type = {
-            "value": "uidvalues",
-            "email": "uidemails",
-            "name": "uidnames",
-            "uri": "uiduris",
-        }
-        table = table_by_type[qtype]
+        conn = await self.connect()
+        try:
+            await conn.execute(
+                "UPDATE keys SET keyvalue=$1 WHERE fingerprint=$2",
+                keyvalue,
+                fingerprint,
+            )
+        finally:
+            await conn.close()
+
+    async def delete_key(self, fingerprint: str) -> None:
+        """Delete a key and all related rows.
+
+        Mirrors KeyStore.delete_key: performs explicit deletes instead of relying
+        on FK cascades (SQLite often runs with foreign_keys off).
+        """
+
+        await self.ensure_schema_current()
 
         conn = await self.connect()
         try:
-            rows = await conn.fetch(
-                f"SELECT id, key_id FROM {table} WHERE value=$1",
-                qvalue,
-            )
+            async with conn.transaction():
+                key_id = await conn.fetchval(
+                    "SELECT id FROM keys WHERE fingerprint=$1",
+                    fingerprint,
+                )
+                if key_id is None:
+                    return
+                key_id = int(key_id)
 
-            results = []
-            unique_fingerprints = set()
-            for row in rows:
-                key_id = int(row["key_id"])
-                key_rows = await conn.fetch("SELECT * FROM keys WHERE id=$1", key_id)
-                key = (await self._build_key_list(key_rows))[0]
-                if key.fingerprint not in unique_fingerprints:
-                    unique_fingerprints.add(key.fingerprint)
-                    results.append(key)
-            return results
+                await conn.execute("DELETE FROM keys WHERE fingerprint=$1", fingerprint)
+                await conn.execute("DELETE FROM subkeys WHERE key_id=$1", key_id)
+                await conn.execute("DELETE FROM uidvalues WHERE key_id=$1", key_id)
+                await conn.execute("DELETE FROM uidcerts WHERE key_id=$1", key_id)
+                await conn.execute("DELETE FROM uidcertlist WHERE key_id=$1", key_id)
+                await conn.execute("DELETE FROM uidemails WHERE key_id=$1", key_id)
+                await conn.execute("DELETE FROM uidnames WHERE key_id=$1", key_id)
+                await conn.execute("DELETE FROM uiduris WHERE key_id=$1", key_id)
         finally:
             await conn.close()
+

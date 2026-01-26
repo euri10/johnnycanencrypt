@@ -142,15 +142,43 @@ class AsyncKeyStore:
 
         await self._db.ensure_schema_current()
 
-    async def import_key(self, keypath: Union[str, Path], onplace: bool = False):
-        """Import a key file into the Postgres-backed async keystore.
 
-        Mirrors the synchronous KeyStore.import_key behavior.
+    async def delete_key(self, key):
+        """Delete a key by fingerprint or Key object (async).
 
-        Parameters
-        - keypath: path to the key file (ASCII armored or binary)
-        - onplace: currently ignored (kept for API parity)
+        Parity target: KeyStore.delete_key.
         """
+
+        from . import Key
+
+        if isinstance(key, str):
+            fingerprint = key
+        elif isinstance(key, Key):
+            fingerprint = key.fingerprint
+        else:
+            raise TypeError(f"Wrong datatype for {str(key)}")
+
+        await self._db.delete_key(fingerprint)
+
+    async def update_password(self, key, password: str, newpassword: str):
+        """Update password for a given key and persist updated key material (async).
+
+        Parity target: KeyStore.update_password.
+        """
+
+        from . import Key
+        import johnnycanencrypt.johnnycanencrypt as rjce
+
+        if not isinstance(key, Key):
+            raise TypeError("key must be a Key")
+
+        cert = rjce.update_password(key.keyvalue, password, newpassword)
+        await self._db.update_keyvalue(fingerprint=key.fingerprint, keyvalue=cert)
+
+        assert cert != key.keyvalue
+        key.keyvalue = cert
+        return key
+
 
         # NOTE: `parse_cert_file` returns parsed metadata, but we need the raw cert bytes
         # to store in the DB (`keys.keyvalue`).
