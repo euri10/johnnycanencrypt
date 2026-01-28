@@ -1,7 +1,7 @@
 import os
 
-from conftest import BASE_TESTSDIR
-from utils import _get_cert_data, verify_files
+from tests.conftest import BASE_TESTSDIR
+from tests.utils import _get_cert_data, verify_files
 
 import johnnycanencrypt.johnnycanencrypt as jce
 

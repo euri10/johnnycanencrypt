@@ -4,11 +4,13 @@ import sqlite3
 
 import pytest
 import vcr
-from conftest import BASE_TESTSDIR
-from utils import verify_files
 
 import johnnycanencrypt as jce
 import johnnycanencrypt.johnnycanencrypt as rjce
+from johnnycanencrypt.key import SignatureType
+from johnnycanencrypt.utils import DB_UPGRADE_DATE
+from tests.conftest import BASE_TESTSDIR
+from tests.utils import verify_files
 
 DATA = "Kushal loves 🦀"
 
@@ -373,7 +375,7 @@ def test_ks_userid_signing(tmp_path):
         t2,
         k,
         ["Kushal Das <kushaldas@gmail.com>", "Kushal Das <kushal@fedoraproject.org>"],
-        jce.SignatureType.PersonaCertification,
+        SignatureType.PersonaCertification,
         password="redhat",
     )
     # k now contains the new updated key
@@ -571,7 +573,7 @@ def test_update_subkey_expiry_time():
 def test_same_key_import_error(tmp_path):
     ks = jce.KeyStore(tmp_path)
     ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
-    with pytest.raises(jce.CryptoError):
+    with pytest.raises(rjce.CryptoError):
         ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
 
 
@@ -607,7 +609,7 @@ def test_ks_upgrade(tmp_path):
         sql = "SELECT * from dbupgrade"
         cursor.execute(sql)
         fromdb = cursor.fetchone()
-        assert fromdb["upgradedate"] == jce.DB_UPGRADE_DATE
+        assert fromdb["upgradedate"] == DB_UPGRADE_DATE
     # TODO: Now verify the keys inside of the new db, in full.
 
 
