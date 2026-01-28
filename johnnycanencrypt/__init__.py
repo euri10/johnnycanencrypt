@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 
-from johnnycanencrypt.key import KeyStore, Cipher, KeyType
+from johnnycanencrypt.key import Cipher, KeyType
+from johnnycanencrypt.keystore import KeyStore
 from johnnycanencrypt.exceptions import KeyNotFoundError
 
 from johnnycanencrypt.johnnycanencrypt import parse_cert_bytes, parse_cert_file
