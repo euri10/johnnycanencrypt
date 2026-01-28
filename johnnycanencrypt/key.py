@@ -1,13 +1,13 @@
 
 from datetime import datetime
 import os
-from typing import Any, Dict, List, Optional, Tuple, Union
 from enum import Enum
+from typing import Any
 
 from johnnycanencrypt.johnnycanencrypt import TouchMode, get_card_version, get_pub_key
 
 
-StrOrBytesPath = Union[str, bytes, os.PathLike[str]]
+StrOrBytesPath = str| bytes| os.PathLike[str]
 class KeyType(Enum):
     PUBLIC = 0
     SECRET = 1
@@ -36,11 +36,11 @@ class Key:
         keyvalue: bytes,
         fingerprint: str,
         keyid: str,
-        uids: List[Dict[str, Any]] = [],
+        uids: list[dict[str, str|bool]],
         keytype: KeyType = KeyType.PUBLIC,
-        expirationtime=None,
-        creationtime=None,
-        othervalues={},
+        expirationtime: int | None = None,
+        creationtime: int | None=None,
+        othervalues: dict[str, Any]={},
         oncard: str = "",
         can_primary_sign: bool = False,
         primary_on_card: str = "",
@@ -72,7 +72,7 @@ class Key:
         "Returns the public key part as string"
         return get_pub_key(self.keyvalue)
 
-    def available_subkeys(self) -> Tuple[bool, bool, bool]:
+    def available_subkeys(self) -> tuple[bool, bool, bool]:
         "Returns bool tuple (enc, signing, auth)"
         subkeys_sorted = self.othervalues["subkeys_sorted"]
         got_enc = False
@@ -114,9 +114,9 @@ class Key:
 
 
 
-def get_card_touch_policies() -> Union[List[TouchMode], None]:
+def get_card_touch_policies() -> list[TouchMode]| None:
     "Get the supported touch policies of the smartcard"
-    result: List[TouchMode] = []
+    result: list[TouchMode] = []
     version = get_card_version()
     if version < (4, 2, 0):
         result = []

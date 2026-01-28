@@ -1,8 +1,9 @@
 import os
+from pathlib import Path
 
 import pytest
-from conftest import BASE_TESTSDIR
-from utils import _get_cert_data
+from tests.conftest import BASE_TESTSDIR
+from tests.utils import _get_cert_data  # pyright: ignore[reportPrivateUsage]
 
 import johnnycanencrypt.johnnycanencrypt as jce
 
@@ -39,11 +40,11 @@ def test_sign_cleartext():
     assert jp.verify_bytes(signed_data.encode("utf-8"))
 
 
-def test_sign_verify_file_cleartext(tmp_path):
+def test_sign_verify_file_cleartext(tmp_path: Path):
     "This will sign a file in cleartext"
     j = jce.Johnny(_get_cert_data(SECRET_PATH))
     output = str(tmp_path / "sign.asc")
-    j.sign_file(
+    _signed = j.sign_file(
         str(BASE_TESTSDIR / "files" / "text.txt").encode(),
         output.encode("utf-8"),
         "redhat",
@@ -59,11 +60,11 @@ def test_sign_verify_file_cleartext(tmp_path):
     assert jp.verify_file(output.encode("utf-8"))
 
 
-def test_sign_verify_file(tmp_path):
+def test_sign_verify_file(tmp_path: Path):
     "This will sign a file as a PGP message"
     j = jce.Johnny(_get_cert_data(SECRET_PATH))
     output = str(tmp_path / "sign.asc")
-    j.sign_file(
+    _signed = j.sign_file(
         str(BASE_TESTSDIR / "files" / "text.txt").encode(),
         output.encode("utf-8"),
         "redhat",
@@ -87,7 +88,7 @@ def test_sign_from_gpg_verify_file():
     assert jp.verify_file(str(BASE_TESTSDIR / "files" / "msg.txt.asc").encode("utf-8"))
 
 
-def test_verify_signed_file(tmp_path):
+def test_verify_signed_file(tmp_path: Path):
     "This will verify a signed message from gpg and extract"
     jp = jce.Johnny(
         _get_cert_data(BASE_TESTSDIR / "files" / "store" / "kushal_updated_key.asc")
@@ -118,7 +119,7 @@ def test_sign_from_different_key_file():
     "This will verify a signed message fro gpg"
     jp = jce.Johnny(_get_cert_data(PUBLIC_PATH))
     with pytest.raises(jce.CryptoError):
-        jp.verify_file(str(BASE_TESTSDIR / "files" / "msg.txt.asc").encode("utf-8"))
+        _verified = jp.verify_file(str(BASE_TESTSDIR / "files" / "msg.txt.asc").encode("utf-8"))
 
 
 def test_verify_bytes_detached():
@@ -141,4 +142,4 @@ def test_verify_bytes_detached_must_fail():
 def test_sign_detached_fail():
     j = jce.Johnny(_get_cert_data(PUBLIC_PATH))
     with pytest.raises(jce.CryptoError):
-        signature = j.sign_bytes_detached(DATA.encode("utf-8"), "redhat")
+        _signature = j.sign_bytes_detached(DATA.encode("utf-8"), "redhat")

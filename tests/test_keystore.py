@@ -36,7 +36,7 @@ def test_no_such_key():
         key = ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
     with pytest.raises(jce.KeyNotFoundError):
         ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
-        key = ks.get_key(None)
+        key = ks.get_key(None)  # pyright: ignore[reportArgumentType]
 
 
 def test_create_primary_key_with_encryption(tmp_path):
@@ -166,7 +166,7 @@ def test_key_deletion(tmp_path):
 
     # Can not use any random data type
     with pytest.raises(TypeError):
-        ks.delete_key(2441139)
+        ks.delete_key(2441139)  # pyright: ignore[reportArgumentType]
 
 # https://github.com/kushaldas/johnnycanencrypt/issues/161
 def test_key_deletion_cleanup(tmp_path):
@@ -208,7 +208,7 @@ def test_ks_update_expiry_time_for_subkeys(tmp_path):
             assert date.date() == datetime.date(2050, 10, 25)
 
     with pytest.raises(ValueError):
-        newkey = ks.update_expiry_in_subkeys(key, subkeys, None, "redhat")
+        newkey = ks.update_expiry_in_subkeys(key, subkeys, None, "redhat")  # pyright: ignore[reportArgumentType]
 
 
 def test_ks_update_expiry_time_for_primary(tmp_path):
@@ -229,6 +229,7 @@ def test_ks_encrypt_decrypt_bytes():
     ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store")
     public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     encrypted = ks.encrypt(public_key, DATA)
+    assert isinstance(encrypted, bytes)
     assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
     secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     decrypted_text = ks.decrypt(secret_key, encrypted, password="redhat").decode(
@@ -243,6 +244,7 @@ def test_ks_encrypt_decrypt_bytes_multiple_recipients():
     key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     encrypted = ks.encrypt([key1, key2], DATA)
+    assert isinstance(encrypted, bytes)
     assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
     secret_key1 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     decrypted_text = ks.decrypt(secret_key1, encrypted, password="redhat").decode(

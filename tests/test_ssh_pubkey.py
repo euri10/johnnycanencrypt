@@ -1,8 +1,6 @@
-import os
-
 import pytest
-from conftest import BASE_TESTSDIR
-from utils import _get_cert_data
+from tests.conftest import BASE_TESTSDIR
+from tests.utils import _get_cert_data
 
 import johnnycanencrypt.johnnycanencrypt as rjce
 

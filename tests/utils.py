@@ -1,10 +1,13 @@
-def _get_cert_data(filepath):
+from pathlib import Path
+
+
+def _get_cert_data(filepath: Path) -> bytes:
     "Returns the filepath content as bytes"
     with open(filepath, "rb") as fobj:
         return fobj.read()
 
 
-def verify_files(inputfile, decrypted_output):
+def verify_files(inputfile: Path, decrypted_output: Path) -> None:
     # read both the files
     with open(inputfile, "rb") as f:
         original_text = f.read()
