@@ -3,10 +3,10 @@ import datetime
 import os
 import tempfile
 
-from conftest import BASE_TESTSDIR
+from johnnycanencrypt.johnnycanencrypt import parse_cert_bytes, parse_cert_file, update_primary_expiry_in_cert
+from tests.conftest import BASE_TESTSDIR
 
 import johnnycanencrypt as jce
-from johnnycanencrypt import johnnycanencrypt as rjce
 
 
 def test_update_primary_expiry_in_cert(tmp_path):
@@ -26,7 +26,7 @@ def test_update_primary_expiry_in_cert(tmp_path):
         expirationtime,
         creationtime,
         othervalues,
-    ) = rjce.parse_cert_file(str(keypath))
+    ) = parse_cert_file(str(keypath))
     with open(keypath, "rb") as fobj:
         oldkeydata = fobj.read()
     assert etime.date() == expirationtime.date()
@@ -36,7 +36,7 @@ def test_update_primary_expiry_in_cert(tmp_path):
     now = datetime.datetime.now()
     # We need to send in the difference between expiration time and now
     etime = int(newexpiration.timestamp() - now.timestamp())
-    newkeydata = rjce.update_primary_expiry_in_cert(oldkeydata, etime, "redhat")
+    newkeydata = update_primary_expiry_in_cert(oldkeydata, etime, "redhat")
     (
         _,
         _,
@@ -44,6 +44,6 @@ def test_update_primary_expiry_in_cert(tmp_path):
         expirationtime,
         creationtime,
         othervalues,
-    ) = rjce.parse_cert_bytes(newkeydata)
+    ) = parse_cert_bytes(newkeydata)
     assert ctime.date() == creationtime.date()
     assert newexpiration.date() == expirationtime.date()
