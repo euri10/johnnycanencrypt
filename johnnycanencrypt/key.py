@@ -2,7 +2,7 @@
 from datetime import datetime
 import os
 from enum import Enum
-from typing import Any
+from typing import Any, override
 
 from johnnycanencrypt.johnnycanencrypt import TouchMode, get_card_version, get_pub_key
 
@@ -30,17 +30,31 @@ class SignatureType(Enum):
 
 class Key:
     "Returns a Key object."
+    
+    keyvalue: bytes
+    keytype: KeyType
+    keyid: str
+    fingerprint: str
+    uids: list[dict[str, Any]]  # pyright: ignore[reportExplicitAny]
+    expirationtime: datetime | None
+    creationtime: datetime | None
+    othervalues: dict[str, Any] | None  # pyright: ignore[reportExplicitAny]
+    oncard: str
+    can_primary_sign: bool
+    primary_on_card: str
+
+
 
     def __init__(
         self,
         keyvalue: bytes,
         fingerprint: str,
         keyid: str,
-        uids: list[dict[str, str|bool]],
+        uids: list[dict[str, str]],
         keytype: KeyType = KeyType.PUBLIC,
         expirationtime: int | None = None,
         creationtime: int | None=None,
-        othervalues: dict[str, Any]={},
+        othervalues: dict[str, Any] | None = None,  # pyright: ignore[reportExplicitAny]
         oncard: str = "",
         can_primary_sign: bool = False,
         primary_on_card: str = "",
@@ -61,11 +75,16 @@ class Key:
         self.can_primary_sign = can_primary_sign
         self.primary_on_card = primary_on_card
 
+    @override
     def __repr__(self):
         return f"<Key fingerprint={self.fingerprint} type={self.keytype.name}>"
 
-    def __eq__(self, value):
+    @override
+    def __eq__(self, value: object)-> bool:
         """Two keys are same when fingerprint and keytype matches"""
+        if not isinstance(value, Key):
+            return NotImplemented
+
         return self.fingerprint == value.fingerprint and self.keytype == value.keytype
 
     def get_pub_key(self) -> str:
@@ -74,12 +93,14 @@ class Key:
 
     def available_subkeys(self) -> tuple[bool, bool, bool]:
         "Returns bool tuple (enc, signing, auth)"
-        subkeys_sorted = self.othervalues["subkeys_sorted"]
+        if self.othervalues is None:
+            return (False, False, False)
+        subkeys_sorted = self.othervalues["subkeys_sorted"]  # pyright: ignore[reportAny]
         got_enc = False
         got_sign = False
         got_auth = False
         # Loop over on the subkeys
-        for subkey in subkeys_sorted:
+        for subkey in subkeys_sorted:  # pyright: ignore[reportAny]
             if subkey["revoked"]:
                 continue
             # When we don't have an expiration date/time.
@@ -96,7 +117,7 @@ class Key:
             # When we have an expiration date/time.
             if (
                 subkey["expiration"] is not None
-                and subkey["expiration"].date() > datetime.now().date()
+                and subkey["expiration"].date() > datetime.now().date()  # pyright: ignore[reportAny]
             ):
                 if subkey["keytype"] == "encryption":
                     got_enc = True

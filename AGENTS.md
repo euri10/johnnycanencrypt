@@ -31,11 +31,8 @@ bd sync               # Sync with git
 
 ```bash
 # Create venv + install dev deps
-python3 -m venv .venv
+uv sync
 source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-
-# Build + install the extension into the venv
 maturin develop
 
 # Run Python tests
@@ -81,16 +78,6 @@ CI reference: `.github/workflows/ci_pr.yml` (uses `uv` to create venv and run `p
   - Python package code lives in `johnnycanencrypt/`.
   - Rust crate code lives in `src/` and is built as a `cdylib` for Python.
   - Tests are `pytest`-style in `tests/` and frequently import helpers from `tests/utils.py`.
-
-- **Sync/async parity**
-  - The repo maintains **sync and async variants** of the DB/keystore APIs.
-  - Async modules intentionally mirror the sync contracts (“parity with ...” docstrings).
-  - Backward-compat re-export modules exist (e.g. `johnnycanencrypt/async_keystore.py` re-exports from `johnnycanencrypt/async_db/keystore.py`).
-
-- **Configuration is environment-driven**
-  - DB backend selection is driven by env vars (see `johnnycanencrypt/db/backend.py`):
-    - `JCE_DB_BACKEND` (`sqlite` default, `postgres`/`postgresql` supported)
-    - `JCE_DATABASE_URL` (or `DATABASE_URL` fallback)
 
 - **Schema versioning approach**
   - DB schema is defined as SQL strings (e.g. `johnnycanencrypt/utils.py: createdb`).

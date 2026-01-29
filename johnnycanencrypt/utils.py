@@ -115,7 +115,7 @@ CREATE TABLE dbupgrade (upgradedate TEXT)
 DB_UPGRADE_DATE = "20250213"
 
 
-def convert_fingerprint(data):
+def convert_fingerprint(data: str)-> str:
     "Converts binary data to fingerprint string"
     s = ""
     for x in data:
@@ -123,7 +123,7 @@ def convert_fingerprint(data):
     return s.upper()
 
 
-def to_sort_by_expiry(date):
+def to_sort_by_expiry(date: dict[str, datetime.datetime | None] )-> datetime.datetime:
     "To help to sort based on expiration date"
     if date["expiration"] is not None:
         return date["expiration"]

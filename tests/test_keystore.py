@@ -1,9 +1,11 @@
 import datetime
 import shutil
 import sqlite3
+from pathlib import Path
+from typing import reveal_type
 
 import pytest
-import vcr
+import vcr  # pyright: ignore[reportMissingTypeStubs]
 
 import johnnycanencrypt as jce
 import johnnycanencrypt.johnnycanencrypt as rjce
@@ -16,15 +18,15 @@ DATA = "Kushal loves 🦀"
 
 
 def test_correct_keystore_path():
-    ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
+    _ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
 
 
 def test_nonexisting_keystore_path():
     with pytest.raises(OSError):
-        ks = jce.KeyStore(BASE_TESTSDIR / "files2/")
+        _ks = jce.KeyStore(BASE_TESTSDIR / "files2/")
 
 
-def test_str(tmp_path):
+def test_str(tmp_path: Path):
     ks = jce.KeyStore(tmp_path)
     dbpath = tmp_path / "jce.db"
     assert str(ks) == f"<KeyStore dbpath={dbpath}>"
@@ -33,13 +35,13 @@ def test_str(tmp_path):
 def test_no_such_key():
     with pytest.raises(jce.KeyNotFoundError):
         ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
-        key = ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
+        _key = ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
     with pytest.raises(jce.KeyNotFoundError):
         ks = jce.KeyStore(BASE_TESTSDIR / "files/store")
-        key = ks.get_key(None)  # pyright: ignore[reportArgumentType]
+        _key = ks.get_key(None)  # pyright: ignore[reportArgumentType]
 
 
-def test_create_primary_key_with_encryption(tmp_path):
+def test_create_primary_key_with_encryption(tmp_path: Path):
     ks = jce.KeyStore(tmp_path)
     newkey = ks.create_key(
         "redhat",
@@ -48,7 +50,7 @@ def test_create_primary_key_with_encryption(tmp_path):
         whichkeys=1,
         can_primary_sign=True,
     )
-    assert newkey.can_primary_sign == True
+    assert newkey.can_primary_sign
 
 
 def test_key_cipher_details():
@@ -63,17 +65,17 @@ def test_key_cipher_details():
     assert saved == result
 
 
-def test_keystore_lifecycle(tmp_path):
+def test_keystore_lifecycle(tmp_path: Path):
     # Now create a fresh db
     ks = jce.KeyStore(tmp_path)
     newkey = ks.create_key("redhat", "test key1 <email@example.com>", jce.Cipher.RSA4k)
     # the default key must be of secret
     assert newkey.keytype == jce.KeyType.SECRET
 
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"))
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellopublic.asc"))
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
+    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"))
+    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellopublic.asc"))
+    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
     # Now check the numbers of keys in the store
     assert (2, 2) == ks.details()
 
@@ -87,7 +89,7 @@ def test_keystore_lifecycle(tmp_path):
     assert key_via_fingerprint == keys_via_emails[0]
 
     # Also verify that kushal's primary key can sign
-    assert key_via_fingerprint.can_primary_sign == True
+    assert key_via_fingerprint.can_primary_sign
 
     # Now verify name cache
     key_via_fingerprint = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
@@ -98,19 +100,19 @@ def test_keystore_lifecycle(tmp_path):
     assert key_via_fingerprint == keys_via_names[0]
 
 
-def test_keystore_contains_key(tmp_path):
+def test_keystore_contains_key(tmp_path: Path):
     "verifies __contains__ method for keystore"
     ks = jce.KeyStore(tmp_path)
     keypath = BASE_TESTSDIR / "files" / "store" / "secret.asc"
     k = ks.import_key(keypath)
-    _, fingerprint, keytype, exp, ctime, othervalues = jce.parse_cert_file(str(keypath))
+    _, fingerprint, _keytype, _exp, _ctime, _othervalues = jce.parse_cert_file(str(keypath))
 
     # First only the fingerprint
     assert fingerprint in ks
     # Next the Key object
     assert k in ks
     # This should be false
-    assert not "1111111" in ks
+    assert "1111111" not in ks
 
 
 def test_keystore_details():
@@ -127,8 +129,8 @@ def test_keystore_keyids():
 def test_keystore_get_via_keyids():
     ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store")
     key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
-    keys = ks.get_keys_by_keyid("FB82AA5D326DA75D")
-    assert len(keys) == 1
+    keys = ks.get_keys_by_keyid("FB82AA5D326DA75D")  # pyright: ignore[reportUnknownVariableType]
+    assert len(keys) == 1  # pyright: ignore[reportUnknownArgumentType]
     assert key == keys[0]
 
 
@@ -139,20 +141,20 @@ def test_keystore_key_uids():
     assert "mail@kushaldas.in" == key.uids[-1]["email"]
 
 
-def test_key_password_change(tmp_path):
+def test_key_password_change(tmp_path: Path):
     ks = jce.KeyStore(tmp_path)
     k = ks.import_key(BASE_TESTSDIR / "files" / "store" / "secret.asc")
     k2 = ks.update_password(k, "redhat", "byebye")
-    data = ks.sign_detached(k2, b"hello", "byebye")
+    _data = ks.sign_detached(k2, b"hello", "byebye")
 
 
-def test_key_deletion(tmp_path):
+def test_key_deletion(tmp_path: Path):
     ks = jce.KeyStore(tmp_path)
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
+    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
     k = ks.import_key((BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"))
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellopublic.asc"))
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellopublic.asc"))
+    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
+    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
     assert (1, 2) == ks.details()
 
     ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
@@ -169,9 +171,9 @@ def test_key_deletion(tmp_path):
         ks.delete_key(2441139)  # pyright: ignore[reportArgumentType]
 
 # https://github.com/kushaldas/johnnycanencrypt/issues/161
-def test_key_deletion_cleanup(tmp_path):
+def test_key_deletion_cleanup(tmp_path: Path):
     ks = jce.KeyStore(tmp_path)
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
+    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
     ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
     con = sqlite3.connect(ks.dbpath)
     con.row_factory = sqlite3.Row
@@ -179,8 +181,8 @@ def test_key_deletion_cleanup(tmp_path):
         cursor = con.cursor()
         # Verify all subkeys should be deleted
         sql = "SELECT * from subkeys"
-        cursor.execute(sql)
-        fromdb = cursor.fetchone()
+        _ = cursor.execute(sql)
+        fromdb = cursor.fetchone()  # pyright: ignore[reportAny]
         assert not fromdb
 
 
@@ -190,11 +192,11 @@ def test_key_equality():
     assert key.fingerprint == "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
 
 
-def test_ks_update_expiry_time_for_subkeys(tmp_path):
+def test_ks_update_expiry_time_for_subkeys(tmp_path : Path):
     "Updates expiry time for a given subkey"
     ks = jce.KeyStore(tmp_path)
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
+    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
 
     key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     subkeys = [
@@ -202,20 +204,21 @@ def test_ks_update_expiry_time_for_subkeys(tmp_path):
     ]
     newexpiration = datetime.datetime(2050, 10, 25, 10)
     newkey = ks.update_expiry_in_subkeys(key, subkeys, newexpiration, "redhat")
-    for _, skey in newkey.othervalues["subkeys"].items():
+    assert newkey.othervalues
+    for _, skey in newkey.othervalues["subkeys"].items():  # pyright: ignore[reportAny]
         if skey[0] == "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F":
-            date = skey[1]
-            assert date.date() == datetime.date(2050, 10, 25)
+            date = skey[1]  # pyright: ignore[reportAny]
+            assert date.date() == datetime.date(2050, 10, 25)  # pyright: ignore[reportAny]
 
     with pytest.raises(ValueError):
         newkey = ks.update_expiry_in_subkeys(key, subkeys, None, "redhat")  # pyright: ignore[reportArgumentType]
 
 
-def test_ks_update_expiry_time_for_primary(tmp_path):
+def test_ks_update_expiry_time_for_primary(tmp_path: Path):
     "Updates expiry time for a given primary key"
     ks = jce.KeyStore(tmp_path)
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
-    ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
+    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
 
     key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     newexpiration = datetime.datetime(2050, 10, 25, 10)
@@ -258,7 +261,7 @@ def test_ks_encrypt_decrypt_bytes_multiple_recipients():
     assert DATA == decrypted_text
 
 
-def test_ks_encrypt_decrypt_bytes_to_file(tmp_path):
+def test_ks_encrypt_decrypt_bytes_to_file(tmp_path: Path):
     "Encrypts and decrypt some bytes"
     outputfile = tmp_path / "encrypted.asc"
     ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store")
@@ -273,7 +276,7 @@ def test_ks_encrypt_decrypt_bytes_to_file(tmp_path):
     assert DATA == decrypted_text
 
 
-def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients(tmp_path):
+def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients(tmp_path: Path):
     "Encrypts and decrypt some bytes"
     outputfile = tmp_path / "encrypted.asc"
     ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store")
@@ -289,7 +292,7 @@ def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients(tmp_path):
     assert DATA == decrypted_text
 
 
-def test_ks_encrypt_decrypt_file(tmp_path):
+def test_ks_encrypt_decrypt_file(tmp_path: Path):
     "Encrypts and decrypt some bytes"
     inputfile = BASE_TESTSDIR / "files" / "text.txt"
     output = tmp_path / "text-encrypted.pgp"
@@ -303,7 +306,7 @@ def test_ks_encrypt_decrypt_file(tmp_path):
     verify_files(inputfile, decrypted_output)
 
 
-def test_ks_encrypt_decrypt_filehandler(tmp_path):
+def test_ks_encrypt_decrypt_filehandler(tmp_path: Path):
     "Encrypts and decrypt some bytes"
     inputfile = BASE_TESTSDIR / "files" / "text.txt"
     output = tmp_path / "text-encrypted.pgp"
@@ -315,11 +318,12 @@ def test_ks_encrypt_decrypt_filehandler(tmp_path):
         assert ks.encrypt_file(public_key, fobj, str(output))
     secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(output, "rb") as fobj:
+        reveal_type(fobj)
         ks.decrypt_file(secret_key, fobj, str(decrypted_output), password="redhat")
     verify_files(inputfile, decrypted_output)
 
 
-def test_ks_encrypt_decrypt_file_multiple_recipients(tmp_path):
+def test_ks_encrypt_decrypt_file_multiple_recipients(tmp_path: Path):
     "Encrypts and decrypt some bytes"
     inputfile = BASE_TESTSDIR / "files" / "text.txt"
     output = tmp_path / "text-encrypted.pgp"
@@ -328,7 +332,7 @@ def test_ks_encrypt_decrypt_file_multiple_recipients(tmp_path):
     ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store")
     key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    encrypted = ks.encrypt_file([key1, key2], str(inputfile), str(output))
+    _encrypted = ks.encrypt_file([key1, key2], str(inputfile), str(output))
     secret_key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     ks.decrypt_file(secret_key1, str(output), str(decrypted_output), password="redhat")
     verify_files(inputfile, decrypted_output)
@@ -389,7 +393,7 @@ def test_ks_userid_signing(tmp_path):
             certs = uid["certifications"]
             # Only the new certification
             assert len(certs) == 1
-            cert = certs[0]
+            cert: dict[str, str| list[tuple[str, str]]] = certs[0]
             assert cert["certification_type"] == "persona"
             for data in cert["certification_list"]:
                 if data[0] == "fingerprint":
@@ -411,6 +415,8 @@ def test_ks_creation_expiration_time(tmp_path):
     keypath = BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"
     ks = jce.KeyStore(tmp_path)
     k = ks.import_key(keypath)
+    assert k.expirationtime
+    assert k.creationtime
     assert etime.date() == k.expirationtime.date()
     assert ctime.date() == k.creationtime.date()
 
@@ -419,6 +425,7 @@ def test_ks_creation_expiration_time(tmp_path):
     newk = ks.create_key(
         "redhat", "Another test key", ciphersuite=jce.Cipher.Cv25519, creation=ctime
     )
+    assert newk.creationtime
     assert ctime.date() == newk.creationtime.date()
     assert not newk.expirationtime
 
@@ -432,6 +439,8 @@ def test_ks_creation_expiration_time(tmp_path):
         expiration=etime,
         can_primary_expire=True,
     )
+    assert newk.creationtime
+    assert newk.expirationtime
     assert ctime.date() == newk.creationtime.date()
     assert etime.date() == newk.expirationtime.date()
 
@@ -445,6 +454,8 @@ def test_ks_creation_expiration_time(tmp_path):
         expiration=etime,
         subkeys_expiration=True,
     )
+    assert newk.creationtime
+    assert newk.othervalues
     assert ctime.date() == newk.creationtime.date()
     for skeyid, subkey in newk.othervalues["subkeys"].items():
         assert subkey[1].date() == etime.date()
@@ -457,8 +468,10 @@ def test_ks_creation_expiration_time(tmp_path):
         expiration=etime,
         subkeys_expiration=True,
     )
+    assert newk.creationtime
     assert datetime.datetime.now().date() == newk.creationtime.date()
     assert not newk.expirationtime
+    assert newk.othervalues
     for skeyid, subkey in newk.othervalues["subkeys"].items():
         assert subkey[1].date() == etime.date()
 
@@ -471,8 +484,11 @@ def test_ks_creation_expiration_time(tmp_path):
         subkeys_expiration=True,
         can_primary_expire=True,
     )
+    assert newk.creationtime
+    assert newk.expirationtime
     assert datetime.datetime.now().date() == newk.creationtime.date()
     assert etime.date() == newk.expirationtime.date()
+    assert newk.othervalues
     for skeyid, subkey in newk.othervalues["subkeys"].items():
         assert subkey[1].date() == etime.date()
 
@@ -692,7 +708,7 @@ def test_fetch_key_by_email(tmp_path):
 @vcr.use_cassette(
     str(BASE_TESTSDIR / "files" / "test_fetch_nonexistingkey_by_email.yml")
 )
-def test_fetch_nonexistingkey_by_email(tmp_path):
+def test_fetch_nonexistingkey_by_email(tmp_path: Path):
     ks = jce.KeyStore(tmp_path)
     with pytest.raises(jce.KeyNotFoundError):
-        ks.fetch_key_by_email("doesnotexists@kushaldas.in")
+        _fetched = ks.fetch_key_by_email("doesnotexists@kushaldas.in")

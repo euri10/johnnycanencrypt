@@ -1,9 +1,16 @@
-import io
 from datetime import datetime
 from enum import IntEnum
-from typing import BinaryIO
+from os import PathLike
+from typing import Any, BinaryIO
 
-KeyData = tuple[list[dict[str, str]], str, bool, datetime | None, datetime, dict[str, str]]
+KeyData = tuple[
+        list[dict[str, Any]], 
+        str,
+        bool, 
+        datetime, 
+        datetime, 
+        dict[Any, Any]
+        ]  # pyright: ignore[reportExplicitAny]
 
 class CryptoError(BaseException): ...
 class SameKeyError(BaseException): ...
@@ -49,7 +56,7 @@ def decrypt_file_on_card(
     certdata: bytes, filepath: bytes, output: bytes, pin: bytes
 ) -> bytes: ...
 def decrypt_filehandler_on_card(
-    certdata: bytes, fh: BinaryIO, output: bytes, pin: bytes
+    certdata: bytes, fh: PathLike[str]|BinaryIO, output: bytes, pin: bytes
 ) -> bytes: ...
 def reset_yubikey() -> bool: ...
 def get_card_details() -> dict[str, str]: ...
@@ -82,7 +89,7 @@ def certify_key(
     certdata: bytes,
     othercertdata: bytes,
     sig_type: int,
-    uids: list[str],
+    uids: list[dict[str, Any]],
     password: bytes,
     oncard: bool,
 ) -> bytes: ...
@@ -116,7 +123,7 @@ def create_key(
     can_primary_expire: bool,
 ) -> tuple[str, str, str]: ...
 def encrypt_filehandler_to_file(
-    publickeys: list[bytes], fh: io.TextIOWrapper | io.BufferedReader, output: bytes, armor: bool | None
+    publickeys: list[bytes], fh: PathLike[str] | BinaryIO, output: bytes, armor: bool | None
 ) -> bool: ...
 def encrypt_bytes_to_file(
     publickeys: list[bytes], data: bytes, output: bytes, armor: bool | None
@@ -142,7 +149,7 @@ class Johnny:
     ) -> bool: ...
     def decrypt_file(self, filepath: bytes, output: bytes, password: str) -> bool: ...
     def decrypt_filehandler(
-        self, fh: BinaryIO, output: bytes, password: str
+        self, fh: BinaryIO | PathLike[str], output: bytes, password: str
     ) -> bool: ...
     def sign_bytes(self, data: bytes, password: str, cleartext: bool) -> bytes: ...
     def sign_file(
