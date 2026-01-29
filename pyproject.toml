@@ -52,4 +52,5 @@ dev = [
     "maturin",
     "ruff",
     "basedpyright>=1.37.2",
+    "coverage>=7.10.7",
 ]
