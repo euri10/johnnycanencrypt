@@ -89,7 +89,7 @@ def certify_key(
     certdata: bytes,
     othercertdata: bytes,
     sig_type: int,
-    uids: list[dict[str, Any]],
+    uids: list[str],
     password: bytes,
     oncard: bool,
 ) -> bytes: ...

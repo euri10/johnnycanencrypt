@@ -193,7 +193,7 @@ class KeyStore:
         self,
         key: Key| str,
         otherkey: Key| str,
-        uids: list[dict[str, Any]],  # pyright: ignore[reportExplicitAny]
+        uids: list[str],
         sig_type: SignatureType = SignatureType.GenericCertification,
         password: str = "",
         oncard: bool=False,
@@ -738,7 +738,7 @@ class KeyStore:
 
                 # Now get the uids
                 sql = "SELECT id, value, revoked FROM uidvalues WHERE key_id=?"
-                cursor.execute(sql, (key_id,))
+                _ = cursor.execute(sql, (key_id,))
                 rows = cursor.fetchall()
                 uids = []
                 for row in rows:
@@ -1057,8 +1057,7 @@ class KeyStore:
         else:
             encrypted_file = outputfile
 
-        encrypt_bytes_to_file(final_key_paths, finaldata, encrypted_file, armor)
-        return True
+        return encrypt_bytes_to_file(final_key_paths, finaldata, encrypted_file, armor)
 
     def decrypt(self, key: str| Key, data: bytes, password: str="") -> bytes:
         """Decrypts the given bytes and returns plain text bytes.
@@ -1099,7 +1098,7 @@ class KeyStore:
         # This is when we receive bytes
         elif isinstance(inputfilepath, bytes):
             if not os.path.exists(inputfilepath):
-                raise FileNotFoundError(f"{inputfilepath} can not be found.")
+                raise FileNotFoundError(f"{inputfilepath!r} can not be found.")
             inputfile = inputfilepath
         else:  # This is when we receive opened file handler
             fh = inputfilepath
@@ -1322,7 +1321,7 @@ class KeyStore:
         return signature
 
     def verify_file_detached(
-            self, key: str | Key, filepath: str|bytes, signature_path: Path
+            self, key: str | Key, filepath: str|bytes, signature_path: StrOrBytesPath
     ):
         """Verifies the given filepath based on the signature file.
 
@@ -1339,7 +1338,7 @@ class KeyStore:
 
         if not os.path.exists(signature_path):
             raise FileNotFoundError(
-                f"The signature file at {signature_path} is missing."
+                f"The signature file at {signature_path!r} is missing."
             )
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"The file at {str(filepath)} is missing.")

@@ -42,6 +42,7 @@ format = "md"
 dev = [
     "pytest",
     "setuptools",
+    "setuptools-rust",
     "wheel",
     "mypy",
     "httpx",
@@ -49,8 +50,6 @@ dev = [
     "scriv",
     "tzdata",
     "maturin",
-    "asyncpg",
-    "pytest-anyio",
     "ruff",
     "basedpyright>=1.37.2",
 ]

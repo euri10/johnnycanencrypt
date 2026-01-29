@@ -1,6 +1,6 @@
 import pytest
 from tests.conftest import BASE_TESTSDIR
-from tests.utils import _get_cert_data
+from tests.utils import _get_cert_data  # pyright: ignore[reportPrivateUsage]
 
 import johnnycanencrypt.johnnycanencrypt as rjce
 
@@ -43,7 +43,7 @@ def test_get_ssh_pubkey_nistp521_no_comment():
 def test_no_authentication_key():
     rsa_data = _get_cert_data(BASE_TESTSDIR / "files" / "hellopublic.asc")
     with pytest.raises(rjce.CryptoError):
-        pubkey = rjce.get_ssh_pubkey(rsa_data, None)
+        _pubkey = rjce.get_ssh_pubkey(rsa_data, None)
 
 
 def test_get_ssh_pubkey_rsa():

@@ -2,7 +2,7 @@ import datetime
 import os
 import tempfile
 
-from conftest import BASE_TESTSDIR
+from tests.conftest import BASE_TESTSDIR
 
 import johnnycanencrypt.johnnycanencrypt as rustjce
 
@@ -31,7 +31,7 @@ def test_write_to_keyring():
         rustjce.export_keyring_file(certs, filename)
         # Now the file has been written to disk
         # let us verify that the file exists.
-        assert os.path.exists(filename) == True
+        assert os.path.exists(filename)
 
         # Now re-read the keyring to verify that we have the right keys back
         newkeys = rustjce.parse_keyring_file(filename)
@@ -74,7 +74,7 @@ def test_parse_cert_file():
     ) = rustjce.parse_cert_file(str(keypath))
     assert etime.date() == expirationtime.date()
     assert ctime.date() == creationtime.date()
-    assert othervalues["can_primary_sign"] == True
+    assert othervalues["can_primary_sign"]
 
 
 def test_parse_cert_bytes():
@@ -146,7 +146,7 @@ def test_no_primary_sign():
         creationtime,
         othervalues,
     ) = rustjce.parse_cert_file(keypath)
-    assert othervalues["can_primary_sign"] == False
+    assert not othervalues["can_primary_sign"]
 
 
 def test_uid_certs():
@@ -168,7 +168,7 @@ def test_uid_certs():
                 assert "creationtime" in cert
                 assert "certification_type" in cert
                 clist = cert["certification_list"]
-                assert type(clist) == list
+                assert type(clist) is list
                 for cvalue in clist:
                     if cvalue[0] == "fingerprint":
                         ctypes["fp"] = True

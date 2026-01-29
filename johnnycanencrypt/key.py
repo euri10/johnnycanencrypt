@@ -30,7 +30,6 @@ class SignatureType(Enum):
 
 class Key:
     "Returns a Key object."
-    
     keyvalue: bytes
     keytype: KeyType
     keyid: str

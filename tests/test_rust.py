@@ -1,12 +1,9 @@
 # We will slowly add more tests for rust codebase
 import datetime
-import os
-import tempfile
 
 from johnnycanencrypt.johnnycanencrypt import parse_cert_bytes, parse_cert_file, update_primary_expiry_in_cert
 from tests.conftest import BASE_TESTSDIR
 
-import johnnycanencrypt as jce
 
 
 def test_update_primary_expiry_in_cert(tmp_path):
@@ -31,7 +28,7 @@ def test_update_primary_expiry_in_cert(tmp_path):
         oldkeydata = fobj.read()
     assert etime.date() == expirationtime.date()
     assert ctime.date() == creationtime.date()
-    assert othervalues["can_primary_sign"] == True
+    assert othervalues["can_primary_sign"]
     newexpiration = datetime.datetime(2050, 10, 25, 10)
     now = datetime.datetime.now()
     # We need to send in the difference between expiration time and now

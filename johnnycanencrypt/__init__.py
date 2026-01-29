@@ -7,7 +7,8 @@ from johnnycanencrypt.keystore import KeyStore
 from johnnycanencrypt.exceptions import KeyNotFoundError
 
 from johnnycanencrypt.johnnycanencrypt import parse_cert_bytes, parse_cert_file
+from johnnycanencrypt.utils import convert_fingerprint
 
-__all__ = ["KeyStore", "KeyNotFoundError", "Cipher", "KeyType" ,"parse_cert_bytes", "parse_cert_file"]
+__all__ = ["KeyStore", "KeyNotFoundError", "Cipher", "KeyType" ,"parse_cert_bytes", "parse_cert_file", "convert_fingerprint"]
 
 

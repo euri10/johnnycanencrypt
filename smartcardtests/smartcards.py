@@ -9,7 +9,6 @@ import tempfile
 import sys
 import os
 
-from pprint import pprint
 
 inp = input(
     "Please make sure *TEST SMARTCARD* is connected and then type Yes to continue: "
@@ -30,8 +29,8 @@ print("Resetting Yubikey")
 print(rjce.reset_yubikey())
 
 print("setting the name")
-rjce.set_name(b"Person<<Good", b"12345678")
-rjce.set_url(b"https://kushaldas.in/great.asc", b"12345678")
+_ = rjce.set_name(b"Person<<Good", b"12345678")
+_ = rjce.set_url(b"https://kushaldas.in/great.asc", b"12345678")
 
 print("Getting card information")
 data = rjce.get_card_details()
@@ -41,21 +40,21 @@ assert data["url"] == "https://kushaldas.in/great.asc"
 
 
 print("Now uploading Cv25519 subkeys to the card")
-rjce.upload_to_smartcard(k.keyvalue, b"12345678", "redhat", whichkeys=7)
+_ = rjce.upload_to_smartcard(k.keyvalue, b"12345678", "redhat", whichkeys=7)
 # Now get the data back
 data = rjce.get_card_details()
 
 print("Now verifying the fingerprints of the subkeys on the card")
 assert (
-    jce.utils.convert_fingerprint(data["sig_f"])
+    jce.convert_fingerprint(data["sig_f"])
     == "30A697C27F90EAED0B78C8235E0BDC772A2CF037"
 )
 assert (
-    jce.utils.convert_fingerprint(data["enc_f"])
+    jce.convert_fingerprint(data["enc_f"])
     == "5D22EC7757DF42ED9C21AC9E7020C6D7B564D455"
 )
 assert (
-    jce.utils.convert_fingerprint(data["auth_f"])
+    jce.convert_fingerprint(data["auth_f"])
     == "50BAC98D4ADFD5D4485A1B04DEECB8B1546ED530"
 )
 
@@ -71,6 +70,7 @@ enc_bytes = ks.encrypt([k], msg)
 print("Encrypted text: ")
 print(enc_bytes)
 
+assert isinstance(enc_bytes, bytes)
 print("Now trying to decrypt it via the smartcard")
 returned_bytes = rjce.decrypt_bytes_on_card(k.keyvalue, enc_bytes, b"123456")
 
@@ -90,7 +90,7 @@ print("Now we will create a test file and sign it.")
 inputfile_for_sign = os.path.join(tempdir.name, "oncard_cv.txt")
 outputfile_for_sign = os.path.join(tempdir.name, "oncard_cv.txt.asc")
 with open(inputfile_for_sign, "w") as fobj:
-    fobj.write("Hello text for signing.")
+    _ = fobj.write("Hello text for signing.")
 
 assert rjce.sign_file_on_card(
     k.keyvalue,
@@ -117,8 +117,8 @@ print("Resetting Yubikey")
 print(rjce.reset_yubikey())
 
 print("setting the name")
-rjce.set_name(b"Person<<Good", b"12345678")
-rjce.set_url(b"https://kushaldas.in/great.asc", b"12345678")
+_ = rjce.set_name(b"Person<<Good", b"12345678")
+_ = rjce.set_url(b"https://kushaldas.in/great.asc", b"12345678")
 
 print("Getting card information")
 data = rjce.get_card_details()
@@ -128,21 +128,21 @@ assert data["url"] == "https://kushaldas.in/great.asc"
 
 
 print("Now uploading RSA subkeys to the card")
-rjce.upload_to_smartcard(k.keyvalue, b"12345678", "redhat", whichkeys=7)
+_ = rjce.upload_to_smartcard(k.keyvalue, b"12345678", "redhat", whichkeys=7)
 # Now get the data back
 data = rjce.get_card_details()
 
 print("Now verifying the fingerprints of the subkeys on the card")
 assert (
-    jce.utils.convert_fingerprint(data["sig_f"])
+    jce.convert_fingerprint(data["sig_f"])
     == "E89EF5363C6F3E47A2067199067DC0B8054D00B1"
 )
 assert (
-    jce.utils.convert_fingerprint(data["enc_f"])
+    jce.convert_fingerprint(data["enc_f"])
     == "2366949147F5DA0306657B76C6F6EC57D4DFB9EC"
 )
 assert (
-    jce.utils.convert_fingerprint(data["auth_f"])
+    jce.convert_fingerprint(data["auth_f"])
     == "B5871E65B9F6E5CF02C43E49B85DB676BEF37B03"
 )
 
@@ -158,6 +158,7 @@ enc_bytes = ks.encrypt([k], msg)
 print("Encrypted text: ")
 print(enc_bytes)
 
+assert isinstance(enc_bytes, bytes)
 print("Now trying to decrypt it via the smartcard")
 returned_bytes = rjce.decrypt_bytes_on_card(k.keyvalue, enc_bytes, b"123456")
 
