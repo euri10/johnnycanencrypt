@@ -1,43 +1,22 @@
 # pyright: reportAny=false
-from collections.abc import Sequence
-from typing import BinaryIO
+from dataclasses import dataclass
+import logging
 import os
-from typing import Any, override
-from urllib.parse import quote
-
-from datetime import datetime
-import httpx
 import shutil
 import sqlite3
+from collections.abc import Sequence
+from datetime import datetime
+from pathlib import Path
+from typing import Any, BinaryIO, override
+from urllib.parse import quote
+
+import httpx
+from sqlspec import ConnectionT, PoolT, SQLResult, SQLSpec, SyncDatabaseConfig
+from sqlspec.config import DriverT
+from sqlspec.exceptions import SQLSpecError
+
 from johnnycanencrypt.exceptions import FetchingError, KeyNotFoundError
 from johnnycanencrypt.key import Cipher, Key, KeyType, SignatureType, StrOrBytesPath
-from .johnnycanencrypt import (
-    SameKeyError,
-    add_uid_in_cert,
-    certify_key,
-    decrypt_bytes_on_card,
-    decrypt_file_on_card,
-    decrypt_filehandler_on_card,
-    get_card_details,
-    revoke_uid_in_cert,
-    sign_bytes_detached_on_card,
-    sign_file_detached_on_card,
-    sign_file_on_card,
-    update_password,
-    update_primary_expiry_in_cert,
-    update_subkeys_expiry_in_cert,
-
-    CryptoError,
-    Johnny,
-    create_key,
-    encrypt_bytes_to_bytes,
-    encrypt_bytes_to_file,
-    encrypt_file_internal,
-    encrypt_filehandler_to_file,
-    merge_keys,
-    parse_cert_bytes,
-    parse_cert_file,
-)
 from johnnycanencrypt.utils import (
     DB_UPGRADE_DATE,
     convert_fingerprint,
@@ -45,146 +24,198 @@ from johnnycanencrypt.utils import (
     to_sort_by_expiry,
 )
 
+from .johnnycanencrypt import (
+    CryptoError,
+    Johnny,
+    SameKeyError,
+    add_uid_in_cert,
+    certify_key,
+    create_key,
+    decrypt_bytes_on_card,
+    decrypt_file_on_card,
+    decrypt_filehandler_on_card,
+    encrypt_bytes_to_bytes,
+    encrypt_bytes_to_file,
+    encrypt_file_internal,
+    encrypt_filehandler_to_file,
+    get_card_details,
+    merge_keys,
+    parse_cert_bytes,
+    parse_cert_file,
+    revoke_uid_in_cert,
+    sign_bytes_detached_on_card,
+    sign_file_detached_on_card,
+    sign_file_on_card,
+    update_password,
+    update_primary_expiry_in_cert,
+    update_subkeys_expiry_in_cert,
+)
 
-from pathlib import Path
-
+logger = logging.getLogger(__name__)
 
 class KeyStore:
     """Returns `KeyStore` class object, takes the directory path as string."""
 
-    def __init__(self, path: StrOrBytesPath) -> None:
-        if isinstance(path, str):
-            fullpath = Path(path).absolute()
-        elif isinstance(path, bytes):
-            try:
-                fullpath = Path(path.decode("utf-8")).absolute()
-            except:  # noqa: E722
-                raise TypeError("Path must be a string or bytes or Path object.")
-        else:
-            fullpath = Path(path).absolute()
+    def __init__(self, spec: SQLSpec, config: SyncDatabaseConfig[ConnectionT, PoolT, DriverT], path: Path)-> None:
+        self.spec = spec
+        self.config = config
+        self.path = path
+        migrated = self.migrate_if_required()
+        logger.debug(f"Database migration required: {migrated}")
 
-        if not fullpath.exists():
-            raise OSError(f"The {fullpath} does not exist.")
-        self.dbpath: Path = fullpath / "jce.db"
-        self.path: Path = fullpath
-        if not self.dbpath.exists():
-            con = sqlite3.connect(self.dbpath)
-            with con:
-                cursor = con.cursor()
-                _ = cursor.executescript(createdb)
+    def migrate_if_required(self) -> bool:
+        "Migrates the database if required"
+        with self.spec.provide_session(self.config) as session:
+            should_we = False
+            try:
+                fromdb = session.fetch_one("SELECT * from dbupgrade")
+                if fromdb["upgradedate"] < DB_UPGRADE_DATE:  # Means old db schema
+                    should_we = True
+            except SQLSpecError as e:  # Means the table is not there.
+                should_we = True
+                _ = session.execute_script(createdb)
                 # we have to insert the date when this database schema was generated
-                _ = cursor.execute(
+                _ = session.execute(
                     "INSERT INTO dbupgrade (upgradedate) values (?)",
                     (DB_UPGRADE_DATE,),
                 )
-        else:
-            # Now we have db already
-            # verify if it has the same database schema
-            self.upgrade_if_required()
-
-    @override
-    def __str__(self) -> str:
-        return f"<KeyStore dbpath={self.dbpath}>"
-
-    def upgrade_if_required(self) -> None:
-        "Upgrades the database schema if required"
-        oldpath = self._upgrade_if_required()
-        if oldpath is None:
-            return
-        os.unlink(oldpath)
-        # Now let us rename the file
-        _ = shutil.copy(self.dbpath, oldpath)
-        os.unlink(self.dbpath)
-        self.dbpath = oldpath
-
-    def _upgrade_if_required(self)-> Path| None:
-        "Internal: Upgrades the database schema if required"
-        should_we = False
-        existing_records = []
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
-        # First we will check if this db schema is old or not
-        with con:
-            cursor = con.cursor()
-            sql = "SELECT * from dbupgrade"
-            try:
-                _ = cursor.execute(sql)
-                fromdb = cursor.fetchone()
-                if fromdb["upgradedate"] < DB_UPGRADE_DATE:  # Means old db schema
-                    should_we = True
-            except sqlite3.OperationalError:  # Means the table is not there.
-                should_we = True
             # Now check if we should upgrade if yes, then do this.
             if should_we:
                 # First read all the existing keys
-                _ = cursor.execute("SELECT * from KEYS")
-                existing_records = cursor.fetchall()
+                existing_records = session.fetch("SELECT * from KEYS")
             else:
-                return None
-        con.close()
-        # Temporay db setup
-        oldpath = self.dbpath
-        self.dbpath = self.path / "jce_upgrade.db"
-        if self.dbpath.exists():  # Means the upgrade db already exist.
-            # Unrecoverable error
-            raise RuntimeError(
-                f"{self.dbpath} already exists, please remove and then try again."
-            )
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
-        with con:
-            cursor = con.cursor()
-            _ = cursor.executescript(createdb)
-            # we have to insert the date when this database schema was generated
-            _ = cursor.execute(
-                "INSERT INTO dbupgrade (upgradedate) values (?)", (DB_UPGRADE_DATE,)
-            )
-        con.close()
-        # now let us insert our existing data
-        for row in existing_records:
-            (
-                uids,
-                fingerprint,
-                keytype,
-                expirationtime,
-                creationtime,
-                othervalues,
-            ) = parse_cert_bytes(row["keyvalue"])
-            self._save_key_info_to_db(
-                row["keyvalue"],
-                uids,
-                fingerprint,
-                keytype,
-                expirationtime,
-                creationtime,
-                othervalues,
-            )
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
-        with con:
-            cursor = con.cursor()
-            for row in existing_records:
-                oncard = row["oncard"]
-                # The following because this column may not exist at all
-                try:
-                    primary_on_card = row["primary_on_card"]
-                except IndexError:
-                    primary_on_card = ""
-                fingerprint = row["fingerprint"]
-                sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
-                _ = cursor.execute(sql, (oncard, primary_on_card, fingerprint))
-        con.close()
-        return oldpath
+                return should_we
+
+
+        # if isinstance(path, str):
+        #     fullpath = Path(path).absolute()
+        # elif isinstance(path, bytes):
+        #     try:
+        #         fullpath = Path(path.decode("utf-8")).absolute()
+        #     except:  # noqa: E722
+        #         raise TypeError("Path must be a string or bytes or Path object.")
+        # else:
+#     fullpath = Path(path).absolute()
+        #
+        # if not fullpath.exists():
+        #     raise OSError(f"The {fullpath} does not exist.")
+        # self.dbpath: Path = fullpath / "jce.db"
+        # self.path: Path = fullpath
+        # if not self.dbpath.exists():
+        #     con = sqlite3.connect(self.dbpath)
+        #     with con:
+        #         cursor = con.cursor()
+        #         _ = cursor.executescript(createdb)
+        #         # we have to insert the date when this database schema was generated
+        #         _ = cursor.execute(
+        #             "INSERT INTO dbupgrade (upgradedate) values (?)",
+        #             (DB_UPGRADE_DATE,),
+        #         )
+        # else:
+        #     # Now we have db already
+        #     # verify if it has the same database schema
+        #     self.upgrade_if_required()
+
+    @override
+    def __str__(self) -> str:
+            return f"<KeyStore dbpath={self.config.connection_config}>"
+
+    # def upgrade_if_required(self) -> None:
+    #     "Upgrades the database schema if required"
+    #     oldpath = self._upgrade_if_required()
+    #     if oldpath is None:
+    #         return
+    #     os.unlink(oldpath)
+    #     # Now let us rename the file
+    #     _ = shutil.copy(self.dbpath, oldpath)
+    #     os.unlink(self.dbpath)
+    #     self.dbpath = oldpath
+    #
+    # def _upgrade_if_required(self)-> Path| None:
+    #     "Internal: Upgrades the database schema if required"
+    #     should_we = False
+    #     existing_records = []
+    #     con = sqlite3.connect(self.dbpath)
+    #     con.row_factory = sqlite3.Row
+    #     # First we will check if this db schema is old or not
+    #     with con:
+    #         cursor = con.cursor()
+    #         sql = "SELECT * from dbupgrade"
+    #         try:
+    #             _ = cursor.execute(sql)
+    #             fromdb = cursor.fetchone()
+    #             if fromdb["upgradedate"] < DB_UPGRADE_DATE:  # Means old db schema
+    #                 should_we = True
+    #         except sqlite3.OperationalError:  # Means the table is not there.
+    #             should_we = True
+    #         # Now check if we should upgrade if yes, then do this.
+    #         if should_we:
+    #             # First read all the existing keys
+    #             _ = cursor.execute("SELECT * from KEYS")
+    #             existing_records = cursor.fetchall()
+    #         else:
+    #             return None
+    #     con.close()
+    #     # Temporay db setup
+    #     oldpath = self.dbpath
+    #     self.dbpath = self.path / "jce_upgrade.db"
+    #     if self.dbpath.exists():  # Means the upgrade db already exist.
+    #         # Unrecoverable error
+    #         raise RuntimeError(
+    #             f"{self.dbpath} already exists, please remove and then try again."
+    #         )
+    #     con = sqlite3.connect(self.dbpath)
+    #     con.row_factory = sqlite3.Row
+    #     with con:
+    #         cursor = con.cursor()
+    #         _ = cursor.executescript(createdb)
+    #         # we have to insert the date when this database schema was generated
+    #         _ = cursor.execute(
+    #             "INSERT INTO dbupgrade (upgradedate) values (?)", (DB_UPGRADE_DATE,)
+    #         )
+    #     con.close()
+    #     # now let us insert our existing data
+    #     for row in existing_records:
+    #         (
+    #             uids,
+    #             fingerprint,
+    #             keytype,
+    #             expirationtime,
+    #             creationtime,
+    #             othervalues,
+    #         ) = parse_cert_bytes(row["keyvalue"])
+    #         self._save_key_info_to_db(
+    #             row["keyvalue"],
+    #             uids,
+    #             fingerprint,
+    #             keytype,
+    #             expirationtime,
+    #             creationtime,
+    #             othervalues,
+    #         )
+    #     con = sqlite3.connect(self.dbpath)
+    #     con.row_factory = sqlite3.Row
+    #     with con:
+    #         cursor = con.cursor()
+    #         for row in existing_records:
+    #             oncard = row["oncard"]
+    #             # The following because this column may not exist at all
+    #             try:
+    #                 primary_on_card = row["primary_on_card"]
+    #             except IndexError:
+    #                 primary_on_card = ""
+    #             fingerprint = row["fingerprint"]
+    #             sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
+    #             _ = cursor.execute(sql, (oncard, primary_on_card, fingerprint))
+    #     con.close()
+    #     return oldpath
 
     def update_password(self, key: Key, password: str, newpassword: str) -> Key:
         """Updates the password of the given key and saves to the database"""
         cert = update_password(key.keyvalue, password, newpassword)
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
-        with con:
-            cursor = con.cursor()
+        with self.spec.provide_session(self.config) as session:
             sql = "UPDATE keys set keyvalue=? where fingerprint=?"
-            _ = cursor.execute(sql, (cert, key.fingerprint))
+            _ = session.execute(sql, (cert, key.fingerprint))
         assert cert != key.keyvalue
         key.keyvalue = cert
         return key
@@ -282,18 +313,13 @@ class KeyStore:
         "Saves all information given to the SQLite3 database"
         etime = str(expirationtime.timestamp()) if expirationtime else ""
         ctime = str(creationtime.timestamp()) if creationtime else ""
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
         ktype = 1 if keytype else 0
         subkeys = othervalues["subkeys"]
         mainkeyid = othervalues["keyid"]
         can_primary_sign = othervalues["can_primary_sign"]
-        with con:
-            cursor = con.cursor()
+        with self.spec.provide_session(self.config) as session:
             # First let us check if a key already exists
-            sql = "SELECT * FROM keys where fingerprint=?"
-            _ = cursor.execute(sql, (fingerprint,))
-            fromdb = cursor.fetchone()
+            fromdb = session.fetch_one_or_none("SELECT * FROM keys where fingerprint=?", fingerprint)
             if fromdb:  # Means a key is there in the db
                 key_id = fromdb["id"]
                 sql = "UPDATE keys SET keyvalue=?, keytype=?, expiration=?, creation=? WHERE id=?"
@@ -309,13 +335,13 @@ class KeyStore:
                     # We will not do anything, if you want reimport for a secret key
                     # delete the old one, and import the new one
                     raise SameKeyError(f"{fingerprint}")
-                _ =cursor.execute(sql, (cert, ktype, etime, ctime, key_id))
+                _ =session.execute(sql, cert, ktype, etime, ctime, key_id)
             else:
-                # Now insert the new key
-                sql = "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation, can_primary_sign) VALUES(?, ?, ?, ?, ?, ?, ?)"
-                _ = cursor.execute(
-                    sql,
-                    (
+                # Now insert the new key and get the key_id with returning, if supported
+                # that's the reason of the try except block
+                try:
+                    k = session.fetch_one_or_none(
+                    "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation, can_primary_sign) VALUES(?, ?, ?, ?, ?, ?, ?) RETURNING id",
                         cert,
                         fingerprint,
                         mainkeyid,
@@ -323,32 +349,33 @@ class KeyStore:
                         etime,
                         ctime,
                         can_primary_sign,
-                    ),
                 )
-                # This `key_id` is the database id
-                key_id = cursor.lastrowid
+                    key_id = k["id"]
+                except SQLSpecError as e:
+                    logger.error(f"Error inserting key: {e}")
+                    raise e
             # Now let us add the subkey and keyid details
             sql = "INSERT INTO subkeys (key_id, fingerprint, keyid, expiration, creation, keytype, revoked) VALUES(?, ?, ?, ?, ?, ?, ?)"
             for subkey in subkeys:
                 ctime = str(subkey[2].timestamp()) if subkey[2] else ""
                 etime = str(subkey[3].timestamp()) if subkey[3] else ""
-                _ = cursor.execute(
+                _ = session.execute(
                     sql,
-                    (key_id, subkey[1], subkey[0], etime, ctime, subkey[4], subkey[5]),
+                    key_id, subkey[1], subkey[0], etime, ctime, subkey[4], subkey[5],
                 )
 
             # TODO: Now for each of the uid, add to the right dictionary
             for uid_keyname in ["name", "value", "email", "uri"]:
                 tablename = f"uid{uid_keyname}s"
                 # First delete all old ones
-                _ = cursor.execute(f"DELETE from {tablename} where key_id=?", (key_id,))
+                _ = session.execute(f"DELETE from {tablename} where key_id=?", key_id)
             for uid in uids:
                 # First we will insert the value
                 if "value" in uid and uid["value"]:
                     revoked = 1 if uid["revoked"] else 0
-                    sql = "INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?)"
-                    _ = cursor.execute(sql, (uid["value"], revoked, key_id))
-                    value_id = cursor.lastrowid
+                    sql = "INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?) returning id"
+                    i = session.fetch_one_or_none(sql, uid["value"], revoked, key_id)
+                    value_id = i["id"]
                     # After we added the value, we should check for certification
                     if len(uid["certifications"]) > 0:
                         for ucert in uid["certifications"]:
@@ -357,18 +384,18 @@ class KeyStore:
                                 if ucert["creationtime"]
                                 else ""
                             )
-                            sql = "INSERT INTO uidcerts (ctype, creation, key_id, value_id) values (?, ?, ?, ?)"
-                            _ = cursor.execute(
+                            sql = "INSERT INTO uidcerts (ctype, creation, key_id, value_id) values (?, ?, ?, ?) returning *"
+                            ucert = session.fetch_one(
                                 sql,
                                 (ucert["certification_type"], ctime, key_id, value_id),
                             )
                             # This is the ID of the certification we just added to the database
-                            ucert_id = cursor.lastrowid
+                            ucert_id = ucert["id"]
                             # Now time to loop over the details and add them
                             for citem in ucert["certification_list"]:
                                 # citem is like [('fingerprint', 'F7FC698FAAE2D2EFBECDE98ED1B3ADC0E0238CA6'), ('keyid', 'D1B3ADC0E0238CA6')]
                                 sql = "INSERT INTO uidcertlist (value, datatype, key_id, value_id, cert_id) values (?, ?, ?, ?, ?)"
-                                _ = cursor.execute(
+                                _ = session.execute(
                                     sql,
                                     (citem[1], citem[0], key_id, value_id, ucert_id),
                                 )
@@ -380,8 +407,7 @@ class KeyStore:
                         tablename = f"uid{uid_keyname}s"
                         value = uid[uid_keyname]
                         sql = f"INSERT INTO {tablename} (value, key_id, value_id) values (?, ?, ?)"
-                        _ = cursor.execute(sql, (value, key_id, value_id))
-        con.close()
+                        _ = session.execute(sql, (value, key_id, value_id))
 
     def __contains__(self, other: str| Key) -> bool:
         """Checks if a Key object of fingerprint str exists in the keystore or not.
@@ -432,27 +458,23 @@ class KeyStore:
         (_, _, _, _, _, othervalues)= parse_cert_bytes(newcert)
         newsubkeys = othervalues["subkeys"]
         # Now save the key
-        con = sqlite3.connect(self.dbpath)
-        with con:
-            cursor = con.cursor()
+        with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
             sql = "UPDATE keys set keyvalue=? where fingerprint=?"
-            _ = cursor.execute(sql, (newcert, key.fingerprint))
+            _ = session.execute(sql, (newcert, key.fingerprint))
             # Now we need the key_id from the database table
-            _ = cursor.execute(
+            fromdb = session.fetch_one(
                 "SELECT id from keys where fingerprint=?", (key.fingerprint,)
             )
-            fromdb = cursor.fetchone()
-            _key_id = fromdb[0]
+            _key_id = fromdb["id"]
             # Now let us add the subkey and keyid details
             sql = "UPDATE subkeys set expiration=? where fingerprint=?"
             for subkey in newsubkeys:
                 etime_str = str(subkey[3].timestamp()) if subkey[3] else ""
-                _ = cursor.execute(
+                _ = session.execute(
                     sql,
                     (etime_str, subkey[1]),
                 )
-        con.close()
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
@@ -491,10 +513,8 @@ class KeyStore:
             etime_str = str(expirytime.timestamp())
         else:
             etime_str = None
-        con = sqlite3.connect(self.dbpath)
-        with con:
-            cursor = con.cursor()
-            _ = cursor.execute(sql, (etime_str, fingerprint))
+        with self.spec.provide_session(self.config) as session:
+            _ = session.execute(sql, (etime_str, fingerprint))
         return self.get_key(fingerprint)
 
     def add_userid(self, key: Key, userid: str, password: str) -> Key:
@@ -652,16 +672,16 @@ class KeyStore:
         "Returns tuple of (number_of_public, number_of_secret_keys)"
         public = 0
         secret = 0
-        con = sqlite3.connect(self.dbpath)
-        with con:
-            cursor = con.cursor()
-            _ = cursor.execute("SELECT id, fingerprint, keytype from keys")
-            rows = cursor.fetchall()
+        with self.spec.provide_session(self.config) as session:
+            rows = session.fetch("SELECT id, fingerprint, keytype from keys")
             for row in rows:
-                if row[2]:
+                if row["keytype"] == 1:
                     secret += 1
-                else:
+                elif row["keytype"] == 0:
                     public += 1
+                else:
+                    logger.warning(f"Unknown keytype {row['keytype']} for key {row['fingerprint']}")
+                    raise CryptoError(f"Unknown keytype {row['keytype']} for key {row['fingerprint']}")
         return public, secret
 
     def get_key(self, fingerprint: str) -> Key:
@@ -672,58 +692,48 @@ class KeyStore:
         return self._internal_get_key(fingerprint)[0]
 
     def _internal_get_key(self, fingerprint: str ="", key_id: str| None=None, allkeys: bool=False):
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
-        with con:
-            cursor = con.cursor()
+        with self.spec.provide_session(self.config) as session:
+            keys = None
             if fingerprint:
-                sql = "SELECT * FROM keys WHERE fingerprint=?"
-                _ = cursor.execute(sql, (fingerprint,))
+                keys = session.execute("SELECT * FROM keys WHERE fingerprint=:fingerprint", fingerprint=fingerprint)
             elif key_id:
-                sql = "SELECT * FROM keys WHERE id=?"
-                _ = cursor.execute(sql, (key_id,))
+                keys = session.execute("SELECT * FROM keys WHERE id=:key_id", key_id=key_id)
             elif allkeys:  # means get all keys
-                sql = "SELECT * FROM keys"
-                _ = cursor.execute(sql)
-            rows = cursor.fetchall()
-            return self._internal_build_key_list(rows, cursor)
+                keys = session.fetch("SELECT * FROM keys")
+            return self._internal_build_key_list(keys)
 
     def get_keys_by_keyid(self, keyid: str):
         "Returns a list of keys for a given KeyID"
         # TODO: This has bad SQL, we can improve in future.
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
         list_of_db_ids = set()
-        with con:
-            cursor = con.cursor()
+        with self.spec.provide_session(self.config) as session:
             sql = "SELECT * FROM keys WHERE keyid=?"
-            cursor.execute(sql, (keyid,))
-            rows = cursor.fetchall()
+            rows = session.fetch(sql, (keyid,))
             for row in rows:
                 list_of_db_ids.add(row["id"])
 
             sql = "SELECT * FROM subkeys WHERE keyid=?"
-            cursor.execute(sql, (keyid,))
-            rows = cursor.fetchall()
+            rows = session.fetch(sql, (keyid,))
             for row in rows:
                 list_of_db_ids.add(row["key_id"])
             # Now the final search
             result = []
             sql = "SELECT * FROM keys WHERE id=?"
             for key_id in list(list_of_db_ids):
-                cursor.execute(sql, (key_id,))
-                rows = cursor.fetchall()
-                result.extend(self._internal_build_key_list(rows, cursor))
+                rows = session.fetch(sql, (key_id,))
+                result.extend(self._internal_build_key_list(rows))
 
             if not result:
                 KeyNotFoundError(f"The key with keyid {keyid} is not found.")
             return result
 
-    def _internal_build_key_list(self, rows, cursor):
+    def _internal_build_key_list(self, keys: SQLResult):
         "Internal method to create a list of keys from db result rows"
+        if not keys:
+            raise KeyNotFoundError("The key(s) not found in the keystore.")
         finalresult = []
         sql_for_certs = "SELECT value, datatype FROM uidcertlist WHERE cert_id=?"
-        for result in rows:
+        for result in keys:
             if result:
                 key_id = result["id"]
                 cert = result["keyvalue"]
@@ -736,53 +746,66 @@ class KeyStore:
                 can_primary_sign = result["can_primary_sign"]
                 primary_on_card = result["primary_on_card"]
 
-                # Now get the uids
-                sql = "SELECT id, value, revoked FROM uidvalues WHERE key_id=?"
-                _ = cursor.execute(sql, (key_id,))
-                rows = cursor.fetchall()
-                uids = []
-                for row in rows:
-                    value_id = row["id"]
-                    revoked = True if row["revoked"] == 1 else False
-                    email = self._get_one_row_from_table(cursor, "uidemails", value_id)
-                    name = self._get_one_row_from_table(cursor, "uidnames", value_id)
-                    uri = self._get_one_row_from_table(cursor, "uiduris", value_id)
-                    # Now time to find any certification for the uid value
-                    # TODO: Write a join query in future please
-                    csql = "SELECT id, ctype, creation FROM uidcerts WHERE key_id=? and value_id=?"
-                    cursor.execute(csql, (key_id, value_id))
-                    certrows = cursor.fetchall()
-                    # let us loop over all the certs
-                    certifications = []
-                    for uidcert in certrows:
-                        cert_result = {}
-                        cert_result["creationtime"] = uidcert["creation"]
-                        cert_result["certification_type"] = uidcert["ctype"]
-                        ucertid = uidcert["id"]
-                        cert_issuers = cursor.execute(sql_for_certs, (ucertid,))
-                        issuers = []
-                        for cissuer in cert_issuers:
-                            issuers.append((cissuer["datatype"], cissuer["value"]))
-                        # now put it in the right place
-                        cert_result["certification_list"] = issuers
-                        # Now put all the data in the right place
-                        certifications.append(cert_result)
+                @dataclass
+                class UIDValues:
+                    "Internal class to help with uidvalues schema"
+                    id: int
+                    value: str
+                    revoked: int
 
-                    uids.append(
-                        {
-                            "value": row["value"],
-                            "revoked": revoked,
-                            "email": email,
-                            "name": name,
-                            "uri": uri,
-                            "certifications": certifications,
-                        }
-                    )
+                # Now get the uids
+                with self.spec.provide_session(self.config) as session:
+                    sql = "SELECT id, value, revoked FROM uidvalues WHERE key_id=?"
+                    uidvalues = session.fetch(sql, key_id,schema_type=UIDValues)
+                    uids = []
+                    for row in uidvalues:
+                        value_id = row.id
+                        revoked = row.revoked is True
+                        def _get_one_row_from_table(tablename, value_id):
+                            "Internal function to select different uid items"
+                            sql = f"SELECT value FROM {tablename} where value_id={value_id}"
+                            _result  = session.fetch_one_or_none(sql)
+                            if _result:
+                                return _result["value"]
+                            else:
+                                return ""
+                        email = _get_one_row_from_table( "uidemails", value_id)
+                        name = _get_one_row_from_table( "uidnames", value_id)
+                        uri = _get_one_row_from_table( "uiduris", value_id)
+                        # Now time to find any certification for the uid value
+                        # TODO: Write a join query in future please
+                        csql = "SELECT id, ctype, creation FROM uidcerts WHERE key_id=? and value_id=?"
+                        certrows = session.fetch(csql, (key_id, value_id))
+                        # let us loop over all the certs
+                        certifications = []
+                        for uidcert in certrows:
+                            cert_result = {}
+                            cert_result["creationtime"] = uidcert["creation"]
+                            cert_result["certification_type"] = uidcert["ctype"]
+                            ucertid = uidcert["id"]
+                            cert_issuers = session.execute(sql_for_certs, (ucertid,))
+                            issuers = []
+                            for cissuer in cert_issuers:
+                                issuers.append((cissuer["datatype"], cissuer["value"]))
+                            # now put it in the right place
+                            cert_result["certification_list"] = issuers
+                            # Now put all the data in the right place
+                            certifications.append(cert_result)
+
+                        uids.append(
+                            {
+                                "value": row.value,
+                                "revoked": revoked,
+                                "email": email,
+                                "name": name,
+                                "uri": uri,
+                                "certifications": certifications,
+                            }
+                        )
 
                 # Get the subkeys
                 sql = "SELECT fingerprint, keyid, expiration, creation, keytype, revoked FROM subkeys WHERE key_id=?"
-                cursor.execute(sql, (key_id,))
-                rows = cursor.fetchall()
+                rows = session.fetch(sql, (key_id,))
                 othervalues = {}
                 subs = {}
                 sort_subkeys = []
@@ -840,17 +863,10 @@ class KeyStore:
                 )
         if finalresult:
             return finalresult
-        raise KeyNotFoundError("The key(s) not found in the keystore.")
-
-    def _get_one_row_from_table(self, cursor, tablename, value_id):
-        "Internal function to select different uid items"
-        sql = f"SELECT value FROM {tablename} where value_id={value_id}"
-        _  = cursor.execute(sql)
-        _result = cursor.fetchone()
-        if _result:
-            return _result["value"]
         else:
-            return ""
+            raise KeyNotFoundError("The key(s) not found in the keystore.")
+
+
 
     def get_all_keys(self) -> list[Key]:
         "Returns a list of keys"
@@ -870,14 +886,10 @@ class KeyStore:
         results = []
         unique_fingerprints = {}
         # TODO: Now let us search
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
-        with con:
-            cursor = con.cursor()
+        with self.spec.provide_session(self.config) as session:
             if qtype == "value":
                 sql = "SELECT id, key_id FROM uidvalues where value=?"
-                cursor.execute(sql, (qvalue,))
-                rows = cursor.fetchall()
+                rows = session.fetch(sql, (qvalue,))
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
@@ -886,8 +898,7 @@ class KeyStore:
                         results.append(key)
             elif qtype == "email":
                 sql = "SELECT id, key_id FROM uidemails where value=?"
-                cursor.execute(sql, (qvalue,))
-                rows = cursor.fetchall()
+                rows = session.fetch(sql, (qvalue,))
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
@@ -896,8 +907,7 @@ class KeyStore:
                         results.append(key)
             elif qtype == "name":
                 sql = "SELECT id, key_id FROM uidenames where value=?"
-                cursor.execute(sql, (qvalue,))
-                rows = cursor.fetchall()
+                rows= session.fetch(sql, (qvalue,))
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
@@ -906,8 +916,7 @@ class KeyStore:
                         results.append(key)
             elif qtype == "uri":
                 sql = "SELECT id, key_id FROM uiduris where value=?"
-                cursor.execute(sql, (qvalue,))
-                rows = cursor.fetchall()
+                rows = session.fetch(sql, (qvalue,))
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
@@ -993,23 +1002,19 @@ class KeyStore:
             raise KeyNotFoundError(
                 "The key for the given fingerprint={fingerprint} is not found in the keystore"
             )
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
-        with con:
-            cursor = con.cursor()
+        with self.spec.provide_session(self.config) as session:
             sql = "SELECT id from keys where fingerprint=?"
-            _ = cursor.execute(sql, (fingerprint,))
-            result = cursor.fetchone()
+            result = session.fetch_one_or_none(sql, (fingerprint,))
             if result:
                 keyid = result["id"]
-                _= cursor.execute("DELETE FROM keys where fingerprint=?", (fingerprint,))
-                _= cursor.execute("DELETE FROM subkeys where key_id=?", (keyid,))
-                _= cursor.execute("DELETE FROM uidvalues where key_id=?", (keyid,))
-                _= cursor.execute("DELETE FROM uidcerts where key_id=?", (keyid,))
-                _= cursor.execute("DELETE FROM uidcertlist where key_id=?", (keyid,))
-                _= cursor.execute("DELETE FROM uidemails where key_id=?", (keyid,))
-                _= cursor.execute("DELETE FROM uidnames where key_id=?", (keyid,))
-                _= cursor.execute("DELETE FROM uiduris where key_id=?", (keyid,))
+                _= session.execute("DELETE FROM keys where fingerprint=?", (fingerprint,))
+                _= session.execute("DELETE FROM subkeys where key_id=?", (keyid,))
+                _= session.execute("DELETE FROM uidvalues where key_id=?", (keyid,))
+                _= session.execute("DELETE FROM uidcerts where key_id=?", (keyid,))
+                _= session.execute("DELETE FROM uidcertlist where key_id=?", (keyid,))
+                _= session.execute("DELETE FROM uidemails where key_id=?", (keyid,))
+                _= session.execute("DELETE FROM uidnames where key_id=?", (keyid,))
+                _= session.execute("DELETE FROM uiduris where key_id=?", (keyid,))
 
     def _find_keys(self, keys: Sequence[Key | str]):
         "To find all the key paths"
