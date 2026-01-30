@@ -611,24 +611,19 @@ class KeyStore:
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "wb") as fobj:
             _ = fobj.write(newcert)
-        con = sqlite3.connect(self.dbpath)
-        with con:
-            cursor = con.cursor()
+        with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
             sql = "UPDATE keys set keyvalue=? where fingerprint=?"
-            _ = cursor.execute(sql, (newcert, key.fingerprint))
+            _ = session.execute(sql, (newcert, key.fingerprint))
             sql = "SELECT id FROM uidvalues WHERE key_id=(SELECT id FROM keys where fingerprint=?) AND value=?"
             # Now loop through the new userids and find the new one
-            _ = cursor.execute(
+            value_id = session.fetch_value(
                 sql, (key.fingerprint, userid)
             )  # Now we will mark this userid as revoked
-            fromdb = cursor.fetchone()
-            value_id = fromdb[0]
 
             revoked = 1
             sql = "UPDATE uidvalues set revoked=? where id=?"
-            _ = cursor.execute(sql, (revoked, value_id))
-        con.close()
+            _revoked = session.execute(sql, (revoked, value_id))
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
