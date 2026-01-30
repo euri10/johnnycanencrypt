@@ -2,6 +2,9 @@
 
 # Currently we are first testing Cv25519 key based operations on smartcard, and then RSA.
 
+from pathlib import Path
+from sqlspec import SQLSpec
+from sqlspec.adapters.sqlite import SqliteConfig
 from johnnycanencrypt import KeyStore, convert_fingerprint
 import johnnycanencrypt.johnnycanencrypt as rjce
 
@@ -32,7 +35,10 @@ check_environment()
 
 
 tempdir = tempfile.TemporaryDirectory()
-ks = KeyStore(tempdir.name)
+tmp_path = Path(tempdir.name)
+spec = SQLSpec()
+config = SqliteConfig(connection_config={"database": tmp_path / "testdb.sqlite3"})
+ks = KeyStore(spec=spec, config=config, path=tmp_path)
 
 print("Now importing the Cv25519 secret key to the keyring")
 k = ks.import_key("smartcardtests/5286C32E7C71E14C4C82F9AE0B207108925CB162.sec")
@@ -74,7 +80,10 @@ assert (
 
 print("Let us move to a new keystore directory")
 tempdir = tempfile.TemporaryDirectory()
-ks = KeyStore(tempdir.name)
+tmp_path = Path(tempdir.name)
+spec = SQLSpec()
+config = SqliteConfig(connection_config={"database": tmp_path / "testdb.sqlite3"})
+ks = KeyStore(spec=spec, config=config, path=tmp_path)
 
 print("Now importing the Cv25519 public key to the keyring")
 k = ks.import_key("smartcardtests/5286C32E7C71E14C4C82F9AE0B207108925CB162.pub")
@@ -162,7 +171,10 @@ assert (
 
 print("Let us move to a new keystore directory")
 tempdir = tempfile.TemporaryDirectory()
-ks = KeyStore(tempdir.name)
+tmp_path = Path(tempdir.name)
+spec = SQLSpec()
+config = SqliteConfig(connection_config={"database": tmp_path / "testdb.sqlite3"})
+ks = KeyStore(spec=spec, config=config, path=tmp_path)
 
 print("Now importing the RSA4096 public key to the keyring")
 k = ks.import_key("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.pub")

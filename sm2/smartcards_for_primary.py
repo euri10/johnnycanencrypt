@@ -3,8 +3,12 @@
 
 import argparse
 import os
+from pathlib import Path
 import sys
 import tempfile
+
+from sqlspec import SQLSpec
+from sqlspec.adapters.sqlite import SqliteConfig
 
 import johnnycanencrypt as jce
 import johnnycanencrypt.johnnycanencrypt as rjce
@@ -33,7 +37,10 @@ PUBLIC_KEY = "tests/files/primary_with_sign_public.asc"
 
 
 tempdir = tempfile.TemporaryDirectory()
-ks = jce.KeyStore(tempdir.name)
+tmp_path = Path(tempdir.name)
+spec = SQLSpec()
+config = SqliteConfig(connection_config={"database": tmp_path / "testdb.sqlite3"})
+ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
 
 print("Now importing the RSA4096 secret key to the keyring")
 # k = ks.import_key("smartcardtests/2184DF8AF2CAFEB16357FE43E6F848F1DDC66C12.sec")
@@ -87,7 +94,10 @@ else:
 
 print("Let us move to a new temporary directory")
 tempdir = tempfile.TemporaryDirectory()
-ks = jce.KeyStore(tempdir.name)
+tmp_path = Path(tempdir.name)
+spec = SQLSpec()
+config = SqliteConfig(connection_config={"database": tmp_path / "testdb.sqlite3"})
+ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
 
 print("Now importing the PUBLIC key to the keyring")
 #

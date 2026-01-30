@@ -1,4 +1,5 @@
 # pyright: reportAny=false
+
 from dataclasses import dataclass
 import logging
 import os
@@ -9,8 +10,7 @@ from typing import Any, BinaryIO, override
 from urllib.parse import quote
 
 import httpx
-from sqlspec import ConnectionT, PoolT, SQLResult, SQLSpec, SyncDatabaseConfig
-from sqlspec.config import DriverT
+from sqlspec import SQLResult, SQLSpec, SyncDatabaseConfig
 from sqlspec.exceptions import SQLSpecError
 
 from johnnycanencrypt.exceptions import FetchingError, KeyNotFoundError
@@ -58,7 +58,7 @@ class KeyStore:
     def __init__(
         self,
         spec: SQLSpec,
-        config: SyncDatabaseConfig[ConnectionT, PoolT, DriverT],
+        config: SyncDatabaseConfig[Any, Any, Any],
         path: Path,
     ) -> None:
         self.spec = spec
@@ -80,12 +80,16 @@ class KeyStore:
                     should_we = True
             except SQLSpecError:  # Means the table is not there.
                 should_we = True
-                _ = session.execute_script(createdb)
-                # we have to insert the date when this database schema was generated
-                _ = session.execute(
-                    "INSERT INTO dbupgrade (upgradedate) values (?)",
-                    (DB_UPGRADE_DATE,),
-                )
+                try:
+                    _ = session.execute_script(createdb)
+                    # we have to insert the date when this database schema was generated
+                    _ = session.execute(
+                        "INSERT INTO dbupgrade (upgradedate) values (?)",
+                        (DB_UPGRADE_DATE,),
+                    )
+                except SQLSpecError as e2:
+                    logger.error(f"Error creating dbupgrade table: {e2}")
+                    raise RuntimeError("Failed to create dbupgrade table") from e2
             # Now check if we should upgrade if yes, then do this.
             if should_we:
                 # First read all the existing keys
@@ -743,7 +747,7 @@ class KeyStore:
                 KeyNotFoundError(f"The key with keyid {keyid} is not found.")
             return result
 
-    def _internal_build_key_list(self, keys: SQLResult):
+    def _internal_build_key_list(self, keys: SQLResult | None):
         "Internal method to create a list of keys from db result rows"
         if not keys:
             raise KeyNotFoundError("The key(s) not found in the keystore.")
@@ -863,7 +867,7 @@ class KeyStore:
                 sort_subkeys.sort(key=lambda x: to_sort_by_expiry(x), reverse=True)
                 othervalues["subkeys"] = subs
                 # TODO: We need a testcase for the sorted subkeys
-                othervalues["subkeys_sorted"] = sort_subkeys
+                othervalues["subkeys_sorted"] = sort_subkeys  # type: ignore[assignment]
 
                 finalresult.append(
                     Key(
@@ -1541,7 +1545,7 @@ class KeyStore:
                 sql = "SELECT fingerprint from keys where id=?"
                 result = session.fetch_one(sql, (fromdb["key_id"],))
             # result = cursor.fetchone()
-            fingerprint = result["fingerprint"]
+                fingerprint = result["fingerprint"]
             # Now let us see if we can find the primary key on the card
             sql = "SELECT DISTINCT id, fingerprint FROM keys where fingerprint IN (?, ?, ?)"
             sig_f = convert_fingerprint(data["sig_f"])
