@@ -1,4 +1,3 @@
-
 from datetime import datetime
 import os
 from enum import Enum
@@ -7,7 +6,9 @@ from typing import Any, override
 from johnnycanencrypt.johnnycanencrypt import TouchMode, get_card_version, get_pub_key
 
 
-StrOrBytesPath = str| bytes| os.PathLike[str]
+StrOrBytesPath = str | bytes | os.PathLike[str]
+
+
 class KeyType(Enum):
     PUBLIC = 0
     SECRET = 1
@@ -30,6 +31,7 @@ class SignatureType(Enum):
 
 class Key:
     "Returns a Key object."
+
     keyvalue: bytes
     keytype: KeyType
     keyid: str
@@ -42,8 +44,6 @@ class Key:
     can_primary_sign: bool
     primary_on_card: str
 
-
-
     def __init__(
         self,
         keyvalue: bytes,
@@ -52,7 +52,7 @@ class Key:
         uids: list[dict[str, str]],
         keytype: KeyType = KeyType.PUBLIC,
         expirationtime: int | None = None,
-        creationtime: int | None=None,
+        creationtime: int | None = None,
         othervalues: dict[str, Any] | None = None,  # pyright: ignore[reportExplicitAny]
         oncard: str = "",
         can_primary_sign: bool = False,
@@ -79,7 +79,7 @@ class Key:
         return f"<Key fingerprint={self.fingerprint} type={self.keytype.name}>"
 
     @override
-    def __eq__(self, value: object)-> bool:
+    def __eq__(self, value: object) -> bool:
         """Two keys are same when fingerprint and keytype matches"""
         if not isinstance(value, Key):
             return NotImplemented
@@ -131,10 +131,7 @@ class Key:
         return (got_enc, got_sign, got_auth)
 
 
-
-
-
-def get_card_touch_policies() -> list[TouchMode]| None:
+def get_card_touch_policies() -> list[TouchMode] | None:
     "Get the supported touch policies of the smartcard"
     result: list[TouchMode] = []
     version = get_card_version()

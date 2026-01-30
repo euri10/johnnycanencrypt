@@ -21,9 +21,9 @@ def verify_files(inputfile: Path, decrypted_output: Path) -> None:
             if a != b:
                 assert False, (
                     f"File contents differ at byte {i}:\n"
-                    f"  original: {original_text[max(0,i-5):i+5]!r}\n"
-                    f"  decrypted: {decrypted_text[max(0,i-5):i+5]!r}"
+                    f"  original: {original_text[max(0, i - 5) : i + 5]!r}\n"
+                    f"  decrypted: {decrypted_text[max(0, i - 5) : i + 5]!r}"
                 )
-    assert len(original_text) == len(decrypted_text), \
+    assert len(original_text) == len(decrypted_text), (
         f"File sizes differ: original={len(original_text)} bytes, decrypted={len(decrypted_text)} bytes"
-
+    )

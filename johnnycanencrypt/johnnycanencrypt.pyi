@@ -3,14 +3,7 @@ from enum import IntEnum
 from os import PathLike
 from typing import Any, BinaryIO
 
-KeyData = tuple[
-        list[dict[str, Any]], 
-        str,
-        bool, 
-        datetime, 
-        datetime, 
-        dict[Any, Any]
-        ]  # pyright: ignore[reportExplicitAny]
+KeyData = tuple[list[dict[str, Any]], str, bool, datetime, datetime, dict[Any, Any]]  # pyright: ignore[reportExplicitAny]
 
 class CryptoError(BaseException): ...
 class SameKeyError(BaseException): ...
@@ -56,7 +49,7 @@ def decrypt_file_on_card(
     certdata: bytes, filepath: bytes, output: bytes, pin: bytes
 ) -> bytes: ...
 def decrypt_filehandler_on_card(
-    certdata: bytes, fh: PathLike[str]|BinaryIO, output: bytes, pin: bytes
+    certdata: bytes, fh: PathLike[str] | BinaryIO, output: bytes, pin: bytes
 ) -> bytes: ...
 def reset_yubikey() -> bool: ...
 def get_card_details() -> dict[str, str]: ...
@@ -123,7 +116,10 @@ def create_key(
     can_primary_expire: bool,
 ) -> tuple[str, str, str]: ...
 def encrypt_filehandler_to_file(
-    publickeys: list[bytes], fh: PathLike[str] | BinaryIO, output: bytes, armor: bool | None
+    publickeys: list[bytes],
+    fh: PathLike[str] | BinaryIO,
+    output: bytes,
+    armor: bool | None,
 ) -> bool: ...
 def encrypt_bytes_to_file(
     publickeys: list[bytes], data: bytes, output: bytes, armor: bool | None

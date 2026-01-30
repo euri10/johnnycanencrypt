@@ -1,9 +1,12 @@
 # We will slowly add more tests for rust codebase
 import datetime
 
-from johnnycanencrypt.johnnycanencrypt import parse_cert_bytes, parse_cert_file, update_primary_expiry_in_cert
+from johnnycanencrypt.johnnycanencrypt import (
+    parse_cert_bytes,
+    parse_cert_file,
+    update_primary_expiry_in_cert,
+)
 from tests.conftest import BASE_TESTSDIR
-
 
 
 def test_update_primary_expiry_in_cert(tmp_path):

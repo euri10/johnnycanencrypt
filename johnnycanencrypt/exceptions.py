@@ -3,6 +3,7 @@
 
 __all__ = ["KeyNotFoundError", "FetchingError"]
 
+
 class KeyNotFoundError(Exception):
     pass
 

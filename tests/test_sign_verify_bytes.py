@@ -119,7 +119,9 @@ def test_sign_from_different_key_file():
     "This will verify a signed message fro gpg"
     jp = jce.Johnny(_get_cert_data(PUBLIC_PATH))
     with pytest.raises(jce.CryptoError):
-        _verified = jp.verify_file(str(BASE_TESTSDIR / "files" / "msg.txt.asc").encode("utf-8"))
+        _verified = jp.verify_file(
+            str(BASE_TESTSDIR / "files" / "msg.txt.asc").encode("utf-8")
+        )
 
 
 def test_verify_bytes_detached():

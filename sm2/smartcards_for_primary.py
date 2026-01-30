@@ -14,6 +14,7 @@ import johnnycanencrypt as jce
 import johnnycanencrypt.johnnycanencrypt as rjce
 from johnnycanencrypt.key import SignatureType
 
+
 # Only run on GitHub CI or with --local flag
 def check_environment():
     parser = argparse.ArgumentParser(description="Smartcard tests for primary key")
@@ -30,6 +31,7 @@ def check_environment():
         print("This script only runs on GitHub CI or with --local flag.")
         print("Usage: python smartcards_for_primary.py --local")
         sys.exit(0)
+
 
 check_environment()
 
@@ -67,7 +69,7 @@ print("Now uploading the primary key in the signing slot.")
 _ = rjce.upload_primary_to_smartcard(k.keyvalue, b"12345678", "redhat", whichslot=2)
 print("Now uploading RSA subkeys to the card")
 _ = rjce.upload_to_smartcard(k.keyvalue, b"12345678", "redhat", whichkeys=1)
-#rjce.set_keyslot_touch_policy(b"12345678", rjce.KeySlot.Signature, rjce.TouchMode.Fixed)
+# rjce.set_keyslot_touch_policy(b"12345678", rjce.KeySlot.Signature, rjce.TouchMode.Fixed)
 # Now get the data back
 data = rjce.get_card_details()
 

@@ -17,10 +17,41 @@ from tests.utils import verify_files
 DATA = "Kushal loves 🦀"
 
 
-def test_correct_keystore_path():
+@pytest.fixture
+def ks():
     spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
+    config = spec.add_config(
+        SqliteConfig(
+            connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
+        )
+    )
     _ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+    return _ks
+
+
+@pytest.fixture
+def tmp_ks(tmp_path: Path):
+    dbpath = tmp_path / "jce.db"
+    spec = SQLSpec()
+    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
+    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+    return ks
+
+
+@pytest.fixture
+def tmp_ks_mixed(tmp_path: Path):
+    spec = SQLSpec()
+    config = spec.add_config(
+        SqliteConfig(
+            connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
+        )
+    )
+    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+    return ks
+
+
+def test_correct_keystore_path(ks: jce.KeyStore):
+    assert ks
 
 
 # def test_nonexisting_keystore_path():
@@ -28,30 +59,20 @@ def test_correct_keystore_path():
 #         _ks = jce.KeyStore(BASE_TESTSDIR / "files2/")
 #
 
-def test_str(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    assert str(ks) == f"<KeyStore dbpath={config.connection_config}>"
+
+def test_str(tmp_ks: jce.KeyStore):
+    assert str(tmp_ks) == f"<KeyStore dbpath={tmp_ks.config.connection_config}>"
 
 
-def test_no_such_key():
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+def test_no_such_key(ks: jce.KeyStore):
     with pytest.raises(jce.KeyNotFoundError):
         _key = ks.get_key("A4F388BBB194925AE301F844C52B42177857DD79")
     with pytest.raises(jce.KeyNotFoundError):
         _key = ks.get_key(None)  # pyright: ignore[reportArgumentType]
 
 
-def test_create_primary_key_with_encryption(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    newkey = ks.create_key(
+def test_create_primary_key_with_encryption(tmp_ks: jce.KeyStore):
+    newkey = tmp_ks.create_key(
         "redhat",
         "test key42 <42@example.com>",
         jce.Cipher.RSA4k,
@@ -61,43 +82,38 @@ def test_create_primary_key_with_encryption(tmp_path: Path):
     assert newkey.can_primary_sign
 
 
-def test_key_cipher_details():
+def test_key_cipher_details(ks: jce.KeyStore):
     saved = [
         ("F4F388BBB194925AE301F844C52B42177857DD79", "EdDSA", 256),
         ("102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F", "EdDSA", 256),
         ("85B67F139D835FA56BA703DB5A7A1560D46ED4F6", "ECDH", 256),
     ]
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
     key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     result = rjce.get_key_cipher_details(key.keyvalue)
     assert saved == result
 
 
-def test_keystore_lifecycle(tmp_path: Path):
+def test_keystore_lifecycle(tmp_ks: jce.KeyStore):
     # Now create a fresh db
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    newkey = ks.create_key("redhat", "test key1 <email@example.com>", jce.Cipher.RSA4k)
+    newkey = tmp_ks.create_key(
+        "redhat", "test key1 <email@example.com>", jce.Cipher.RSA4k
+    )
     # the default key must be of secret
     assert newkey.keytype == jce.KeyType.SECRET
 
-    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
-    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"))
-    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellopublic.asc"))
-    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"))
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellopublic.asc"))
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
     # Now check the numbers of keys in the store
-    assert (2, 2) == ks.details()
+    assert (2, 2) == tmp_ks.details()
 
-    ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    assert (2, 1) == ks.details()
+    tmp_ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    assert (2, 1) == tmp_ks.details()
 
     # Now verify email cache
-    key_via_fingerprint = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
-    keys_via_emails = ks.get_keys(qvalue="kushaldas@gmail.com", qtype="email")
+    key_via_fingerprint = tmp_ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    keys_via_emails = tmp_ks.get_keys(qvalue="kushaldas@gmail.com", qtype="email")
     assert len(keys_via_emails) == 1
     assert key_via_fingerprint == keys_via_emails[0]
 
@@ -105,139 +121,107 @@ def test_keystore_lifecycle(tmp_path: Path):
     assert key_via_fingerprint.can_primary_sign
 
     # Now verify name cache
-    key_via_fingerprint = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    keys_via_names = ks.get_keys(
+    key_via_fingerprint = tmp_ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    keys_via_names = tmp_ks.get_keys(
         qvalue="Test User2 <random@example.com>", qtype="value"
     )
     assert len(keys_via_names) == 1
     assert key_via_fingerprint == keys_via_names[0]
 
 
-def test_keystore_contains_key(tmp_path: Path):
+def test_keystore_contains_key(tmp_ks: jce.KeyStore):
     "verifies __contains__ method for keystore"
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
     keypath = BASE_TESTSDIR / "files" / "store" / "secret.asc"
-    k = ks.import_key(keypath)
-    _, fingerprint, _keytype, _exp, _ctime, _othervalues = jce.parse_cert_file(str(keypath))
+    k = tmp_ks.import_key(keypath)
+    _, fingerprint, _keytype, _exp, _ctime, _othervalues = jce.parse_cert_file(
+        str(keypath)
+    )
 
     # First only the fingerprint
-    assert fingerprint in ks
+    assert fingerprint in tmp_ks
     # Next the Key object
-    assert k in ks
+    assert k in tmp_ks
     # This should be false
-    assert "1111111" not in ks
+    assert "1111111" not in tmp_ks
 
 
-def test_keystore_details():
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+def test_keystore_details(ks: jce.KeyStore):
     assert (1, 2) == ks.details()
 
 
-def test_keystore_keyids():
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+def test_keystore_keyids(ks: jce.KeyStore):
     key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
     assert key.keyid == "D8219C8C43F6C5E1"
 
 
-def test_keystore_get_via_keyids():
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+def test_keystore_get_via_keyids(ks: jce.KeyStore):
     key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
     keys = ks.get_keys_by_keyid("FB82AA5D326DA75D")  # pyright: ignore[reportUnknownVariableType]
     assert len(keys) == 1  # pyright: ignore[reportUnknownArgumentType]
     assert key == keys[0]
 
 
-def test_keystore_key_uids():
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+def test_keystore_key_uids(ks: jce.KeyStore):
     key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
     assert "kushal@fedoraproject.org" == key.uids[0]["email"]
     assert "mail@kushaldas.in" == key.uids[-1]["email"]
 
 
-def test_key_password_change(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    k = ks.import_key(BASE_TESTSDIR / "files" / "store" / "secret.asc")
-    k2 = ks.update_password(k, "redhat", "byebye")
-    _data = ks.sign_detached(k2, b"hello", "byebye")
+def test_key_password_change(tmp_ks: jce.KeyStore):
+    k = tmp_ks.import_key(BASE_TESTSDIR / "files" / "store" / "secret.asc")
+    k2 = tmp_ks.update_password(k, "redhat", "byebye")
+    _data = tmp_ks.sign_detached(k2, b"hello", "byebye")
 
 
-def test_key_deletion(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
-    k = ks.import_key((BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"))
-    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellopublic.asc"))
-    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
-    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
-    assert (1, 2) == ks.details()
+def test_key_deletion(tmp_ks: jce.KeyStore):
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
+    k = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"))
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellopublic.asc"))
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+    assert (1, 2) == tmp_ks.details()
 
-    ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    assert (1, 1) == ks.details()
+    tmp_ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    assert (1, 1) == tmp_ks.details()
 
     # Now send in a Key object
-    ks.delete_key(k)
-    assert (0, 1) == ks.details()
+    tmp_ks.delete_key(k)
+    assert (0, 1) == tmp_ks.details()
     with pytest.raises(jce.KeyNotFoundError):
-        ks.delete_key("11111")
+        tmp_ks.delete_key("11111")
 
     # Can not use any random data type
     with pytest.raises(TypeError):
-        ks.delete_key(2441139)  # pyright: ignore[reportArgumentType]
+        tmp_ks.delete_key(2441139)  # pyright: ignore[reportArgumentType]
+
 
 # https://github.com/kushaldas/johnnycanencrypt/issues/161
-def test_key_deletion_cleanup(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
-    ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    with spec.provide_session(config) as session:
+def test_key_deletion_cleanup(tmp_ks: jce.KeyStore):
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
+    tmp_ks.delete_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    with tmp_ks.spec.provide_session(tmp_ks.config) as session:
         # Verify all subkeys should be deleted
         sql = "SELECT * from subkeys"
         fromdb = session.fetch_one_or_none(sql)
         assert not fromdb
 
 
-def test_key_equality():
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+def test_key_equality(ks: jce.KeyStore):
     key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     assert key.fingerprint == "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
 
 
-def test_ks_update_expiry_time_for_subkeys(tmp_path : Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+def test_ks_update_expiry_time_for_subkeys(tmp_ks: jce.KeyStore):
     "Updates expiry time for a given subkey"
-    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
-    _= ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
 
-    key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    key = tmp_ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     subkeys = [
         "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F",
     ]
     newexpiration = datetime.datetime(2050, 10, 25, 10)
-    newkey = ks.update_expiry_in_subkeys(key, subkeys, newexpiration, "redhat")
+    newkey = tmp_ks.update_expiry_in_subkeys(key, subkeys, newexpiration, "redhat")
     assert newkey.othervalues
     for _, skey in newkey.othervalues["subkeys"].items():  # pyright: ignore[reportAny]
         if skey[0] == "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F":
@@ -245,30 +229,23 @@ def test_ks_update_expiry_time_for_subkeys(tmp_path : Path):
             assert date.date() == datetime.date(2050, 10, 25)  # pyright: ignore[reportAny]
 
     with pytest.raises(ValueError):
-        newkey = ks.update_expiry_in_subkeys(key, subkeys, None, "redhat")
+        newkey = tmp_ks.update_expiry_in_subkeys(key, subkeys, None, "redhat")
 
 
-def test_ks_update_expiry_time_for_primary(tmp_path: Path):
+def test_ks_update_expiry_time_for_primary(tmp_ks: jce.KeyStore):
     "Updates expiry time for a given primary key"
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
-    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellosecret.asc"))
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
 
-    key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    key = tmp_ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     newexpiration = datetime.datetime(2050, 10, 25, 10)
-    newkey = ks.update_expiry_in_primary(key, newexpiration, "redhat")
+    newkey = tmp_ks.update_expiry_in_primary(key, newexpiration, "redhat")
     assert newkey.expirationtime
     assert newkey.expirationtime.date() == datetime.date(2050, 10, 25)
 
 
-def test_ks_encrypt_decrypt_bytes():
+def test_ks_encrypt_decrypt_bytes(ks: jce.KeyStore):
     "Encrypts and decrypt some bytes"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
     public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     encrypted = ks.encrypt(public_key, DATA)
     assert isinstance(encrypted, bytes)
@@ -280,11 +257,8 @@ def test_ks_encrypt_decrypt_bytes():
     assert DATA == decrypted_text
 
 
-def test_ks_encrypt_decrypt_bytes_multiple_recipients():
+def test_ks_encrypt_decrypt_bytes_multiple_recipients(ks: jce.KeyStore):
     "Encrypts and decrypt some bytes"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
     key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     encrypted = ks.encrypt([key1, key2], DATA)
@@ -302,141 +276,128 @@ def test_ks_encrypt_decrypt_bytes_multiple_recipients():
     assert DATA == decrypted_text
 
 
-def test_ks_encrypt_decrypt_bytes_to_file(tmp_path: Path):
+def test_ks_encrypt_decrypt_bytes_to_file(tmp_ks_mixed: jce.KeyStore, tmp_path: Path):
     "Encrypts and decrypt some bytes"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
     outputfile = tmp_path / "encrypted.asc"
-    secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    assert ks.encrypt(secret_key, DATA, outputfile=str(outputfile))
+    secret_key = tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    assert tmp_ks_mixed.encrypt(secret_key, DATA, outputfile=str(outputfile))
     with open(outputfile, "rb") as fobj:
         encrypted = fobj.read()
-    secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    decrypted_text = ks.decrypt(secret_key, encrypted, password="redhat").decode(
-        "utf-8"
-    )
+    secret_key = tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    decrypted_text = tmp_ks_mixed.decrypt(
+        secret_key, encrypted, password="redhat"
+    ).decode("utf-8")
     assert DATA == decrypted_text
 
 
-def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients(tmp_path: Path):
+def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients(
+    tmp_ks_mixed: jce.KeyStore, tmp_path: Path
+):
     "Encrypts and decrypt some bytes"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+
     outputfile = tmp_path / "encrypted.asc"
-    key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    assert ks.encrypt([key1, key2], DATA, outputfile=str(outputfile))
+    key1 = tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    key2 = tmp_ks_mixed.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    assert tmp_ks_mixed.encrypt([key1, key2], DATA, outputfile=str(outputfile))
     with open(outputfile, "rb") as fobj:
         encrypted = fobj.read()
-    secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    decrypted_text = ks.decrypt(secret_key, encrypted, password="redhat").decode(
-        "utf-8"
-    )
+    secret_key = tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    decrypted_text = tmp_ks_mixed.decrypt(
+        secret_key, encrypted, password="redhat"
+    ).decode("utf-8")
     assert DATA == decrypted_text
 
 
-def test_ks_encrypt_decrypt_file(tmp_path: Path):
+def test_ks_encrypt_decrypt_file(tmp_ks_mixed: jce.KeyStore, tmp_path: Path):
     "Encrypts and decrypt some bytes"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
     inputfile = BASE_TESTSDIR / "files" / "text.txt"
     output = tmp_path / "text-encrypted.pgp"
     decrypted_output = tmp_path / "text.txt"
 
-    public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    assert ks.encrypt_file(public_key, str(inputfile), str(output))
-    secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    _ =ks.decrypt_file(secret_key, str(output), str(decrypted_output), password="redhat")
+    public_key = tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    assert tmp_ks_mixed.encrypt_file(public_key, str(inputfile), str(output))
+    secret_key = tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    _ = tmp_ks_mixed.decrypt_file(
+        secret_key, str(output), str(decrypted_output), password="redhat"
+    )
     verify_files(inputfile, decrypted_output)
 
 
-def test_ks_encrypt_decrypt_filehandler(tmp_path: Path):
+def test_ks_encrypt_decrypt_filehandler(tmp_ks_mixed: jce.KeyStore, tmp_path: Path):
     "Encrypts and decrypt some bytes"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
     inputfile = BASE_TESTSDIR / "files" / "text.txt"
     output = tmp_path / "text-encrypted.pgp"
     decrypted_output = tmp_path / "text.txt"
 
-    public_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    public_key = tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(inputfile, "rb") as fobj:
-        assert ks.encrypt_file(public_key, fobj, str(output))
-    secret_key = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+        assert tmp_ks_mixed.encrypt_file(public_key, fobj, str(output))
+    secret_key = tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(output, "rb") as fobj:
-        _ =ks.decrypt_file(secret_key, fobj, str(decrypted_output), password="redhat")
+        _ = tmp_ks_mixed.decrypt_file(
+            secret_key, fobj, str(decrypted_output), password="redhat"
+        )
     verify_files(inputfile, decrypted_output)
 
 
-def test_ks_encrypt_decrypt_file_multiple_recipients(tmp_path: Path):
+def test_ks_encrypt_decrypt_file_multiple_recipients(
+    tmp_ks_mixed: jce.KeyStore, tmp_path: Path
+):
     "Encrypts and decrypt some bytes"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
     inputfile = BASE_TESTSDIR / "files" / "text.txt"
     output = tmp_path / "text-encrypted.pgp"
     decrypted_output = tmp_path / "text.txt"
 
-    key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    _encrypted = ks.encrypt_file([key1, key2], str(inputfile), str(output))
-    secret_key1 = ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    _ =ks.decrypt_file(secret_key1, str(output), str(decrypted_output), password="redhat")
+    key1 = tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    key2 = tmp_ks_mixed.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    _encrypted = tmp_ks_mixed.encrypt_file([key1, key2], str(inputfile), str(output))
+    secret_key1 = tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    _ = tmp_ks_mixed.decrypt_file(
+        secret_key1, str(output), str(decrypted_output), password="redhat"
+    )
     verify_files(inputfile, decrypted_output)
-    secret_key2 = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    _ =ks.decrypt_file(secret_key2, str(output), str(decrypted_output), password="redhat")
+    secret_key2 = tmp_ks_mixed.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    _ = tmp_ks_mixed.decrypt_file(
+        secret_key2, str(output), str(decrypted_output), password="redhat"
+    )
     verify_files(inputfile, decrypted_output)
 
 
-def test_ks_sign_data():
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+def test_ks_sign_data(ks: jce.KeyStore):
     key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     signed = ks.sign_detached(key, "hello", "redhat")
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
     assert ks.verify(key, "hello", signed)
 
 
-def test_ks_sign_data_fails():
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+def test_ks_sign_data_fails(ks: jce.KeyStore):
     key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     signed = ks.sign_detached(key, "hello", "redhat")
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
     assert not ks.verify(key, "hello2", signed)
 
 
-def test_ks_sign_verify_file_detached(tmp_path:Path):
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+def test_ks_sign_verify_file_detached(tmp_ks_mixed: jce.KeyStore, tmp_path: Path):
     inputfile = BASE_TESTSDIR / "files" / "text.txt"
     _ = shutil.copy(inputfile, tmp_path)
     key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     file_to_be_signed = tmp_path / "text.txt"
-    signed = ks.sign_file_detached(key, str(file_to_be_signed), "redhat", write=True)
+    signed = tmp_ks_mixed.sign_file_detached(
+        key, str(file_to_be_signed), "redhat", write=True
+    )
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
-    assert ks.verify_file_detached(
+    assert tmp_ks_mixed.verify_file_detached(
         key, str(file_to_be_signed), str(file_to_be_signed) + ".asc"
     )
 
 
-def test_ks_userid_signing(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+def test_ks_userid_signing(tmp_ks: jce.KeyStore):
     # Now create a fresh db
-    k = ks.import_key((BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"))
-    t2 = ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+    k = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"))
+    t2 = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
 
     # now let us sign the keys in kushal's uids
-    k = ks.certify_key(
+    k = tmp_ks.certify_key(
         t2,
         k,
         ["Kushal Das <kushaldas@gmail.com>", "Kushal Das <kushal@fedoraproject.org>"],
@@ -452,7 +413,7 @@ def test_ks_userid_signing(tmp_path: Path):
             certs = uid["certifications"]
             # Only the new certification
             assert len(certs) == 1
-            cert: dict[str, str| list[tuple[str, str]]] = certs[0]
+            cert: dict[str, str | list[tuple[str, str]]] = certs[0]
             assert cert["certification_type"] == "persona"
             for data in cert["certification_list"]:
                 if data[0] == "fingerprint":
@@ -463,20 +424,16 @@ def test_ks_userid_signing(tmp_path: Path):
             assert len(uid["certifications"]) == 0
 
 
-def test_ks_creation_expiration_time(tmp_path: Path):
+def test_ks_creation_expiration_time(tmp_ks: jce.KeyStore):
     """
     Tests via Kushal's key and a new key
     """
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
     # These two are known values from kushal
     etime = datetime.datetime(2020, 10, 16, 20, 53, 47)
     ctime = datetime.datetime(2017, 10, 17, 20, 53, 47)
     # First let us check from the file
     keypath = BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"
-    k = ks.import_key(keypath)
+    k = tmp_ks.import_key(keypath)
     assert k.expirationtime
     assert k.creationtime
     assert etime.date() == k.expirationtime.date()
@@ -484,7 +441,7 @@ def test_ks_creation_expiration_time(tmp_path: Path):
 
     # now with a new key and creation time
     ctime = datetime.datetime(2010, 10, 10, 20, 53, 47)
-    newk = ks.create_key(
+    newk = tmp_ks.create_key(
         "redhat", "Another test key", ciphersuite=jce.Cipher.Cv25519, creation=ctime
     )
     assert newk.creationtime
@@ -494,7 +451,7 @@ def test_ks_creation_expiration_time(tmp_path: Path):
     # Now both creation and expirationtime for primary key
     ctime = datetime.datetime(2008, 10, 10, 20, 53, 47)
     etime = datetime.datetime(2025, 12, 15, 20, 53, 47)
-    newk = ks.create_key(
+    newk = tmp_ks.create_key(
         "redhat",
         "Another test key",
         creation=ctime,
@@ -509,7 +466,7 @@ def test_ks_creation_expiration_time(tmp_path: Path):
     # Now both creation and expirationtime for subkeys
     ctime = datetime.datetime(2008, 10, 10, 20, 53, 47)
     etime = datetime.datetime(2029, 12, 15, 20, 53, 47)
-    newk = ks.create_key(
+    newk = tmp_ks.create_key(
         "redhat",
         "Test key with subkey expiration",
         creation=ctime,
@@ -524,7 +481,7 @@ def test_ks_creation_expiration_time(tmp_path: Path):
 
     # Now only providing expirationtime for subkeys
     etime = datetime.datetime(2030, 6, 5, 20, 53, 47)
-    newk = ks.create_key(
+    newk = tmp_ks.create_key(
         "redhat",
         "Test key with subkey expiration",
         expiration=etime,
@@ -539,7 +496,7 @@ def test_ks_creation_expiration_time(tmp_path: Path):
 
     # Now verify both subkeys and primary can expire
     etime = datetime.datetime(2030, 6, 5, 20, 53, 47)
-    newk = ks.create_key(
+    newk = tmp_ks.create_key(
         "redhat",
         "Test key with subkey expiration",
         expiration=etime,
@@ -555,20 +512,14 @@ def test_ks_creation_expiration_time(tmp_path: Path):
         assert subkey[1].date() == etime.date()
 
 
-def test_get_all_keys():
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+def test_get_all_keys(ks: jce.KeyStore):
     keys = ks.get_all_keys()
     assert 3 == len(keys)
     # TODO: add more checks here in future
 
 
-def test_get_pub_key():
+def test_get_pub_key(ks: jce.KeyStore):
     """Verifies that we export only the public key part from any key"""
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
     fingerprint = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     key = ks.get_key(fingerprint)
     # verify that the key is a secret
@@ -579,36 +530,28 @@ def test_get_pub_key():
     assert pub_key.startswith("-----BEGIN PGP PUBLIC KEY BLOCK-----")
 
 
-def test_add_userid(tmp_path: Path):
+def test_add_userid(tmp_ks: jce.KeyStore):
     """Verifies that we can add uid to a cert"""
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    key = ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+    key = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
     # check that there is only one userid
     assert len(key.uids) == 1
 
     # now add a new userid
-    key2 = ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
+    key2 = tmp_ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
 
     assert key2.fingerprint == key.fingerprint
     assert len(key2.uids) == 2
     assert key2.keytype == jce.KeyType.SECRET
 
 
-def test_add_and_revoke_userid(tmp_path: Path):
+def test_add_and_revoke_userid(tmp_ks: jce.KeyStore):
     """Verifies that we can add uid to a cert"""
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    key = ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
+    key = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
     # check that there is only one userid
     assert len(key.uids) == 1
 
     # now add a new userid
-    key2 = ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
+    key2 = tmp_ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
 
     assert key2.fingerprint == key.fingerprint
     assert len(key2.uids) == 2
@@ -618,7 +561,7 @@ def test_add_and_revoke_userid(tmp_path: Path):
         assert not uid["revoked"]
 
     # now let us reove the new user id
-    key3 = ks.revoke_userid(key2, "Off Spinner <spin@example.com>", "redhat")
+    key3 = tmp_ks.revoke_userid(key2, "Off Spinner <spin@example.com>", "redhat")
     # verify the values
     assert key3.fingerprint == key.fingerprint
     assert len(key3.uids) == 2
@@ -630,26 +573,19 @@ def test_add_and_revoke_userid(tmp_path: Path):
             assert not uid["revoked"]
 
 
-def test_add_userid_fails_for_public(tmp_path: Path):
+def test_add_userid_fails_for_public(tmp_ks: jce.KeyStore):
     """Verifies that adding uid to a public key fails"""
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    key = ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
+    key = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
     # verify that the key is a secret
     assert len(key.uids) == 1
 
     # now add a new userid
     with pytest.raises(ValueError):
-        _key2 = ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
+        _key2 = tmp_ks.add_userid(key, "Off Spinner <spin@example.com>", "redhat")
 
 
-def test_update_subkey_expiry_time():
+def test_update_subkey_expiry_time(ks: jce.KeyStore):
     "Updates the expirytime for a given subkey"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
     key = ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     fps = [
         "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F",
@@ -665,52 +601,36 @@ def test_update_subkey_expiry_time():
             assert date.date() == tomorrow
 
 
-def test_same_key_import_error(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
+def test_same_key_import_error(tmp_ks: jce.KeyStore):
+    _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
     with pytest.raises(rjce.CryptoError):
-        _ = ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
+        _ = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
 
 
-def test_key_without_uid(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    k = ks.create_key("redhat")
+def test_key_without_uid(tmp_ks: jce.KeyStore):
+    k = tmp_ks.create_key("redhat")
     uids, _fp, _secret, _et, _ct, _othervalues = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 0
 
 
-def test_key_with_multiple_uids(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+def test_key_with_multiple_uids(tmp_ks: jce.KeyStore):
     uids = [
         "Kushal Das <kushaldas@gmail.com>",
         "kushal@freedom.press",
         "This is also Kushal",
     ]
-    k = ks.create_key("redhat", uids)
+    k = tmp_ks.create_key("redhat", uids)
     uids, fp, secret, et, ct, othervalues = jce.parse_cert_bytes(k.keyvalue)
     assert len(uids) == 3
 
 
-def test_ks_upgrade(tmp_path: Path):
+def test_ks_upgrade(tmp_ks: jce.KeyStore, tmp_path: Path):
     "tests db upgrade from an old db"
     # copy db
     shutil.copy(BASE_TESTSDIR / "files" / "store" / "oldjce.db", tmp_path / "jce.db")
 
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    _ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
     # First we will check if this db schema is old or not
-    with spec.provide_session(config) as session:
+    with tmp_ks.spec.provide_session(tmp_ks.config) as session:
         sql = "SELECT * from dbupgrade"
         fromdb = session.fetch_one(sql)
         assert fromdb["upgradedate"] == DB_UPGRADE_DATE
@@ -725,15 +645,13 @@ def test_ks_upgrade_failure(tmp_path: Path):
     )
     with pytest.raises(RuntimeError):
         spec = SQLSpec()
-        config = spec.add_config(SqliteConfig(connection_config={"database": tmp_path / "jce.db"}))
-        _ks = jce.KeyStore(spec=spec, config=config,path=tmp_path)
+        config = spec.add_config(
+            SqliteConfig(connection_config={"database": tmp_path / "jce.db"})
+        )
+        _ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
 
 
 def test_get_encrypted_for():
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    _ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
-
     keyids = rjce.file_encrypted_for(
         str(BASE_TESTSDIR / "files" / "double_recipient.asc")
     )
@@ -745,11 +663,8 @@ def test_get_encrypted_for():
     assert keyids == ["1CF980B8E69E112A", "5A7A1560D46ED4F6"]
 
 
-def test_available_subkeys_for_no_expiration():
+def test_available_subkeys_for_no_expiration(ks: jce.KeyStore):
     """Verifies that we export only the public key part from any key"""
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
     fingerprint = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     key = ks.get_key(fingerprint)
     e, s, a = key.available_subkeys()
@@ -758,14 +673,10 @@ def test_available_subkeys_for_no_expiration():
     assert not a
 
 
-def test_available_subkeys_for_expired(tmp_path: Path):
+def test_available_subkeys_for_expired(tmp_ks: jce.KeyStore):
     """Verifies that we export only the public key part from any key"""
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    ks.import_key(BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc")
-    key = ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    tmp_ks.import_key(BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc")
+    key = tmp_ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
     e, s, a = key.available_subkeys()
     assert not e
     assert not s
@@ -773,12 +684,8 @@ def test_available_subkeys_for_expired(tmp_path: Path):
 
 
 @vcr.use_cassette(str(BASE_TESTSDIR / "files" / "test_fetch_key_by_fingerprint.yml"))
-def test_fetch_key_by_fingerprint(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    key = ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298290")
+def test_fetch_key_by_fingerprint(tmp_ks: jce.KeyStore):
+    key = tmp_ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298290")
     assert len(key.uids) == 1
     uid = key.uids[0]
     assert uid["email"] == "torbrowser@torproject.org"
@@ -788,22 +695,16 @@ def test_fetch_key_by_fingerprint(tmp_path: Path):
 @vcr.use_cassette(
     str(BASE_TESTSDIR / "files" / "test_fetch_nonexistingkey_by_fingerprint.yml")
 )
-def test_fetch_nonexistingkey_by_fingerprint(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+def test_fetch_nonexistingkey_by_fingerprint(tmp_ks: jce.KeyStore):
     with pytest.raises(jce.KeyNotFoundError):
-        _key = ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298291")
+        _key = tmp_ks.fetch_key_by_fingerprint(
+            "EF6E286DDA85EA2A4BA7DE684E2C6E8793298291"
+        )
 
 
 @vcr.use_cassette(str(BASE_TESTSDIR / "files" / "test_fetch_key_by_email.yml"))
-def test_fetch_key_by_email(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    key = ks.fetch_key_by_email("anwesha.srkr@gmail.com")
+def test_fetch_key_by_email(tmp_ks: jce.KeyStore):
+    key = tmp_ks.fetch_key_by_email("anwesha.srkr@gmail.com")
     assert len(key.uids) == 2
     uid = key.uids[0]
     assert uid["name"] == "Anwesha Das"
@@ -813,10 +714,6 @@ def test_fetch_key_by_email(tmp_path: Path):
 @vcr.use_cassette(
     str(BASE_TESTSDIR / "files" / "test_fetch_nonexistingkey_by_email.yml")
 )
-def test_fetch_nonexistingkey_by_email(tmp_path: Path):
-    dbpath = tmp_path / "jce.db"
-    spec = SQLSpec()
-    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+def test_fetch_nonexistingkey_by_email(tmp_ks: jce.KeyStore):
     with pytest.raises(jce.KeyNotFoundError):
-        _fetched = ks.fetch_key_by_email("doesnotexists@kushaldas.in")
+        _fetched = tmp_ks.fetch_key_by_email("doesnotexists@kushaldas.in")

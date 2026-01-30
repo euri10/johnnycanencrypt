@@ -13,7 +13,7 @@ PUBLIC_KEY = BASE_TESTSDIR / "files" / "public.asc"
 SECRET_KEY = BASE_TESTSDIR / "files" / "secret.asc"
 
 
-def test_encryption_of_multiple_keys_to_files(tmp_path: Path)-> None:
+def test_encryption_of_multiple_keys_to_files(tmp_path: Path) -> None:
     "Encrypt bytes to a file using multiple keys"
     output = tmp_path / "multiple-enc.asc"
     if os.path.exists(output):
@@ -134,11 +134,12 @@ def test_decrypt_file_from_gpg(tmp_path: Path):
     _j = jce.Johnny(_get_cert_data(PUBLIC_KEY))
     jp = jce.Johnny(_get_cert_data(SECRET_KEY))
     assert jp.decrypt_file(
-        str(encrypted_file).encode("utf-8"), str(decrypted_output).encode("utf-8"), "redhat"
+        str(encrypted_file).encode("utf-8"),
+        str(decrypted_output).encode("utf-8"),
+        "redhat",
     )
 
     verify_files(inputfile, decrypted_output)
-
 
 
 def test_encrypt_decrypt_files(tmp_path: Path):
@@ -149,7 +150,9 @@ def test_encrypt_decrypt_files(tmp_path: Path):
 
     # Now encrypt and then decrypt
     j = jce.Johnny(_get_cert_data(PUBLIC_KEY))
-    assert j.encrypt_file(str(inputfile).encode("utf-8"), str(output).encode("utf-8"), None)
+    assert j.encrypt_file(
+        str(inputfile).encode("utf-8"), str(output).encode("utf-8"), None
+    )
     jp = jce.Johnny(_get_cert_data(SECRET_KEY))
     assert jp.decrypt_file(
         str(output).encode("utf-8"), str(decrypted_output).encode("utf-8"), "redhat"

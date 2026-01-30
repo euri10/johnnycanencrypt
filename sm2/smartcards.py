@@ -17,7 +17,7 @@ import os
 # Only run on GitHub CI or with --local flag
 def check_environment():
     parser = argparse.ArgumentParser(description="Smartcard tests")
-    _ =parser.add_argument(
+    _ = parser.add_argument(
         "--local",
         action="store_true",
         help="Run locally (requires physical smartcard)",
@@ -30,6 +30,7 @@ def check_environment():
         print("This script only runs on GitHub CI or with --local flag.")
         print("Usage: python smartcards.py --local")
         sys.exit(0)
+
 
 check_environment()
 
@@ -65,18 +66,9 @@ _ = rjce.upload_to_smartcard(k.keyvalue, b"12345678", "redhat", whichkeys=7)
 data = rjce.get_card_details()
 
 print("Now verifying the fingerprints of the subkeys on the card")
-assert (
-    convert_fingerprint(data["sig_f"])
-    == "30A697C27F90EAED0B78C8235E0BDC772A2CF037"
-)
-assert (
-    convert_fingerprint(data["enc_f"])
-    == "5D22EC7757DF42ED9C21AC9E7020C6D7B564D455"
-)
-assert (
-    convert_fingerprint(data["auth_f"])
-    == "50BAC98D4ADFD5D4485A1B04DEECB8B1546ED530"
-)
+assert convert_fingerprint(data["sig_f"]) == "30A697C27F90EAED0B78C8235E0BDC772A2CF037"
+assert convert_fingerprint(data["enc_f"]) == "5D22EC7757DF42ED9C21AC9E7020C6D7B564D455"
+assert convert_fingerprint(data["auth_f"]) == "50BAC98D4ADFD5D4485A1B04DEECB8B1546ED530"
 
 print("Let us move to a new keystore directory")
 tempdir = tempfile.TemporaryDirectory()
@@ -156,18 +148,9 @@ _ = rjce.upload_to_smartcard(k.keyvalue, b"12345678", "redhat", whichkeys=7)
 data = rjce.get_card_details()
 
 print("Now verifying the fingerprints of the subkeys on the card")
-assert (
-    convert_fingerprint(data["sig_f"])
-    == "E89EF5363C6F3E47A2067199067DC0B8054D00B1"
-)
-assert (
-    convert_fingerprint(data["enc_f"])
-    == "2366949147F5DA0306657B76C6F6EC57D4DFB9EC"
-)
-assert (
-    convert_fingerprint(data["auth_f"])
-    == "B5871E65B9F6E5CF02C43E49B85DB676BEF37B03"
-)
+assert convert_fingerprint(data["sig_f"]) == "E89EF5363C6F3E47A2067199067DC0B8054D00B1"
+assert convert_fingerprint(data["enc_f"]) == "2366949147F5DA0306657B76C6F6EC57D4DFB9EC"
+assert convert_fingerprint(data["auth_f"]) == "B5871E65B9F6E5CF02C43E49B85DB676BEF37B03"
 
 print("Let us move to a new keystore directory")
 tempdir = tempfile.TemporaryDirectory()

@@ -54,12 +54,10 @@ data = rjce.get_card_details()
 
 print("Now verifying the fingerprints of the subkeys on the card")
 assert (
-    jce.convert_fingerprint(data["sig_f"])
-    == "30A697C27F90EAED0B78C8235E0BDC772A2CF037"
+    jce.convert_fingerprint(data["sig_f"]) == "30A697C27F90EAED0B78C8235E0BDC772A2CF037"
 )
 assert (
-    jce.convert_fingerprint(data["enc_f"])
-    == "5D22EC7757DF42ED9C21AC9E7020C6D7B564D455"
+    jce.convert_fingerprint(data["enc_f"]) == "5D22EC7757DF42ED9C21AC9E7020C6D7B564D455"
 )
 assert (
     jce.convert_fingerprint(data["auth_f"])
@@ -146,12 +144,10 @@ data = rjce.get_card_details()
 
 print("Now verifying the fingerprints of the subkeys on the card")
 assert (
-    jce.convert_fingerprint(data["sig_f"])
-    == "E89EF5363C6F3E47A2067199067DC0B8054D00B1"
+    jce.convert_fingerprint(data["sig_f"]) == "E89EF5363C6F3E47A2067199067DC0B8054D00B1"
 )
 assert (
-    jce.convert_fingerprint(data["enc_f"])
-    == "2366949147F5DA0306657B76C6F6EC57D4DFB9EC"
+    jce.convert_fingerprint(data["enc_f"]) == "2366949147F5DA0306657B76C6F6EC57D4DFB9EC"
 )
 assert (
     jce.convert_fingerprint(data["auth_f"])

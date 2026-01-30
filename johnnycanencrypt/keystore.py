@@ -1544,7 +1544,7 @@ class KeyStore:
                 _ = session.execute(sql, (data["serial_number"], fromdb["key_id"]))
                 sql = "SELECT fingerprint from keys where id=?"
                 result = session.fetch_one(sql, (fromdb["key_id"],))
-            # result = cursor.fetchone()
+                # result = cursor.fetchone()
                 fingerprint = result["fingerprint"]
             # Now let us see if we can find the primary key on the card
             sql = "SELECT DISTINCT id, fingerprint FROM keys where fingerprint IN (?, ?, ?)"
