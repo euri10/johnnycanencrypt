@@ -2,7 +2,6 @@
 from dataclasses import dataclass
 import logging
 import os
-import sqlite3
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
@@ -52,10 +51,16 @@ from .johnnycanencrypt import (
 
 logger = logging.getLogger(__name__)
 
+
 class KeyStore:
     """Returns `KeyStore` class object, takes the directory path as string."""
 
-    def __init__(self, spec: SQLSpec, config: SyncDatabaseConfig[ConnectionT, PoolT, DriverT], path: Path)-> None:
+    def __init__(
+        self,
+        spec: SQLSpec,
+        config: SyncDatabaseConfig[ConnectionT, PoolT, DriverT],
+        path: Path,
+    ) -> None:
         self.spec = spec
         self.config = config
         self.path = path
@@ -67,8 +72,11 @@ class KeyStore:
         with self.spec.provide_session(self.config) as session:
             should_we = False
             try:
-                fromdb = session.fetch_one("SELECT * from dbupgrade")
-                if fromdb["upgradedate"] < DB_UPGRADE_DATE:  # Means old db schema
+                # TODO: comparison on string date is weak, change to integer later ?
+                upgradedate = session.fetch_value(
+                    "SELECT upgradedate from dbupgrade",
+                )
+                if upgradedate < DB_UPGRADE_DATE:  # Means old db schema
                     should_we = True
             except SQLSpecError:  # Means the table is not there.
                 should_we = True
@@ -82,10 +90,9 @@ class KeyStore:
             if should_we:
                 # First read all the existing keys
                 _existing_records = session.fetch("SELECT * from KEYS")
+                return should_we
             else:
                 return should_we
-
-
         # if isinstance(path, str):
         #     fullpath = Path(path).absolute()
         # elif isinstance(path, bytes):
@@ -94,7 +101,7 @@ class KeyStore:
         #     except:  # noqa: E722
         #         raise TypeError("Path must be a string or bytes or Path object.")
         # else:
-#     fullpath = Path(path).absolute()
+        #     fullpath = Path(path).absolute()
         #
         # if not fullpath.exists():
         #     raise OSError(f"The {fullpath} does not exist.")
@@ -117,7 +124,7 @@ class KeyStore:
 
     @override
     def __str__(self) -> str:
-            return f"<KeyStore dbpath={self.config.connection_config}>"
+        return f"<KeyStore dbpath={self.config.connection_config}>"
 
     # def upgrade_if_required(self) -> None:
     #     "Upgrades the database schema if required"
@@ -221,12 +228,12 @@ class KeyStore:
 
     def certify_key(
         self,
-        key: Key| str,
-        otherkey: Key| str,
+        key: Key | str,
+        otherkey: Key | str,
         uids: list[str],
         sig_type: SignatureType = SignatureType.GenericCertification,
         password: str = "",
-        oncard: bool=False,
+        oncard: bool = False,
     ) -> Key:
         """Certifies the given uids based on a list of values. Returns the new key.
 
@@ -286,9 +293,9 @@ class KeyStore:
         uids: list[dict[str, Any]],  # pyright: ignore[reportExplicitAny]
         fingerprint: str,
         keytype: bool,
-        expirationtime : datetime | None=None,
-        creationtime : datetime | None=None,
-        subkeys: dict[str, Any] | None= None   # pyright: ignore[reportExplicitAny]
+        expirationtime: datetime | None = None,
+        creationtime: datetime | None = None,
+        subkeys: dict[str, Any] | None = None,  # pyright: ignore[reportExplicitAny]
     ):
         "Populates the internal database of the store from a keyfile"
         if not subkeys:
@@ -301,13 +308,13 @@ class KeyStore:
 
     def _save_key_info_to_db(
         self,
-        cert:bytes ,
+        cert: bytes,
         uids: list[dict[str, Any]],  # pyright: ignore[reportExplicitAny]
         fingerprint: str,
         keytype: bool,
         expirationtime: datetime | None,
         creationtime: datetime | None,
-        othervalues: dict[str,Any],  # pyright: ignore[reportExplicitAny]
+        othervalues: dict[str, Any],  # pyright: ignore[reportExplicitAny]
     ):
         "Saves all information given to the SQLite3 database"
         etime = str(expirationtime.timestamp()) if expirationtime else ""
@@ -318,7 +325,9 @@ class KeyStore:
         can_primary_sign = othervalues["can_primary_sign"]
         with self.spec.provide_session(self.config) as session:
             # First let us check if a key already exists
-            fromdb = session.fetch_one_or_none("SELECT * FROM keys where fingerprint=?", fingerprint)
+            fromdb = session.fetch_one_or_none(
+                "SELECT * FROM keys where fingerprint=?", fingerprint
+            )
             if fromdb:  # Means a key is there in the db
                 key_id = fromdb["id"]
                 sql = "UPDATE keys SET keyvalue=?, keytype=?, expiration=?, creation=? WHERE id=?"
@@ -334,13 +343,13 @@ class KeyStore:
                     # We will not do anything, if you want reimport for a secret key
                     # delete the old one, and import the new one
                     raise SameKeyError(f"{fingerprint}")
-                _ =session.execute(sql, cert, ktype, etime, ctime, key_id)
+                _ = session.execute(sql, cert, ktype, etime, ctime, key_id)
             else:
                 # Now insert the new key and get the key_id with returning, if supported
                 # that's the reason of the try except block
                 try:
                     k = session.fetch_one_or_none(
-                    "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation, can_primary_sign) VALUES(?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                        "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation, can_primary_sign) VALUES(?, ?, ?, ?, ?, ?, ?) RETURNING id",
                         cert,
                         fingerprint,
                         mainkeyid,
@@ -348,7 +357,7 @@ class KeyStore:
                         etime,
                         ctime,
                         can_primary_sign,
-                )
+                    )
                     key_id = k["id"]
                 except SQLSpecError as e:
                     logger.error(f"Error inserting key: {e}")
@@ -360,7 +369,13 @@ class KeyStore:
                 etime = str(subkey[3].timestamp()) if subkey[3] else ""
                 _ = session.execute(
                     sql,
-                    key_id, subkey[1], subkey[0], etime, ctime, subkey[4], subkey[5],
+                    key_id,
+                    subkey[1],
+                    subkey[0],
+                    etime,
+                    ctime,
+                    subkey[4],
+                    subkey[5],
                 )
 
             # TODO: Now for each of the uid, add to the right dictionary
@@ -408,7 +423,7 @@ class KeyStore:
                         sql = f"INSERT INTO {tablename} (value, key_id, value_id) values (?, ?, ?)"
                         _ = session.execute(sql, (value, key_id, value_id))
 
-    def __contains__(self, other: str| Key) -> bool:
+    def __contains__(self, other: str | Key) -> bool:
         """Checks if a Key object of fingerprint str exists in the keystore or not.
 
         :param other: Either fingerprint as str or `Key` object.
@@ -454,7 +469,7 @@ class KeyStore:
         # Now get the key material
         newcert = update_subkeys_expiry_in_cert(key.keyvalue, subkeys, etime, password)
         # We only need get the subkeys and get the expiration time from them
-        (_, _, _, _, _, othervalues)= parse_cert_bytes(newcert)
+        (_, _, _, _, _, othervalues) = parse_cert_bytes(newcert)
         newsubkeys = othervalues["subkeys"]
         # Now save the key
         with self.spec.provide_session(self.config) as session:
@@ -478,7 +493,7 @@ class KeyStore:
         return self.get_key(fingerprint)
 
     def update_expiry_in_primary(
-        self, key: Key, expiration: datetime| None, password: str
+        self, key: Key, expiration: datetime | None, password: str
     ) -> Key:
         """Updates the expiry date for the primary key, saves on the database. Then returns the modified key object
 
@@ -553,7 +568,7 @@ class KeyStore:
             sql = "UPDATE keys set keyvalue=? where fingerprint=?"
             _ = session.execute(sql, (newcert, key.fingerprint))
             # Now we need the key_id from the database table
-            key_id =  session.fetch_value(
+            key_id = session.fetch_value(
                 "SELECT id from keys where fingerprint=?", (key.fingerprint,)
             )
             # fromdb = cursor.fetchone()
@@ -627,7 +642,7 @@ class KeyStore:
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
-    def import_key(self, keypath: str| Path, onplace: bool=False) -> Key:  # pyright: ignore[reportUnusedParameter]
+    def import_key(self, keypath: str | Path, onplace: bool = False) -> Key:  # pyright: ignore[reportUnusedParameter]
         """Imports a given key from the given file path.
 
         :param keypath: Path to the pgp key file, either string or Path object.
@@ -639,7 +654,7 @@ class KeyStore:
         else:
             path = str(keypath)
         keydata = parse_cert_file(path)
-        ( 
+        (
             uids,
             fingerprint,
             keytype,
@@ -670,8 +685,12 @@ class KeyStore:
                 elif row["keytype"] == 0:
                     public += 1
                 else:
-                    logger.warning(f"Unknown keytype {row['keytype']} for key {row['fingerprint']}")
-                    raise CryptoError(f"Unknown keytype {row['keytype']} for key {row['fingerprint']}")
+                    logger.warning(
+                        f"Unknown keytype {row['keytype']} for key {row['fingerprint']}"
+                    )
+                    raise CryptoError(
+                        f"Unknown keytype {row['keytype']} for key {row['fingerprint']}"
+                    )
         return public, secret
 
     def get_key(self, fingerprint: str) -> Key:
@@ -681,13 +700,20 @@ class KeyStore:
         """
         return self._internal_get_key(fingerprint)[0]
 
-    def _internal_get_key(self, fingerprint: str ="", key_id: str| None=None, allkeys: bool=False):
+    def _internal_get_key(
+        self, fingerprint: str = "", key_id: str | None = None, allkeys: bool = False
+    ):
         with self.spec.provide_session(self.config) as session:
             keys = None
             if fingerprint:
-                keys = session.execute("SELECT * FROM keys WHERE fingerprint=:fingerprint", fingerprint=fingerprint)
+                keys = session.execute(
+                    "SELECT * FROM keys WHERE fingerprint=:fingerprint",
+                    fingerprint=fingerprint,
+                )
             elif key_id:
-                keys = session.execute("SELECT * FROM keys WHERE id=:key_id", key_id=key_id)
+                keys = session.execute(
+                    "SELECT * FROM keys WHERE id=:key_id", key_id=key_id
+                )
             elif allkeys:  # means get all keys
                 keys = session.fetch("SELECT * FROM keys")
             return self._internal_build_key_list(keys)
@@ -739,6 +765,7 @@ class KeyStore:
                 @dataclass
                 class UIDValues:
                     "Internal class to help with uidvalues schema"
+
                     id: int
                     value: str
                     revoked: int
@@ -746,22 +773,24 @@ class KeyStore:
                 # Now get the uids
                 with self.spec.provide_session(self.config) as session:
                     sql = "SELECT id, value, revoked FROM uidvalues WHERE key_id=?"
-                    uidvalues = session.fetch(sql, key_id,schema_type=UIDValues)
+                    uidvalues = session.fetch(sql, key_id, schema_type=UIDValues)
                     uids = []
                     for row in uidvalues:
                         value_id = row.id
                         revoked = True if row.revoked else False
+
                         def _get_one_row_from_table(tablename, value_id):
                             "Internal function to select different uid items"
                             sql = f"SELECT value FROM {tablename} where value_id={value_id}"
-                            _result  = session.fetch_one_or_none(sql)
+                            _result = session.fetch_one_or_none(sql)
                             if _result:
                                 return _result["value"]
                             else:
                                 return ""
-                        email = _get_one_row_from_table( "uidemails", value_id)
-                        name = _get_one_row_from_table( "uidnames", value_id)
-                        uri = _get_one_row_from_table( "uiduris", value_id)
+
+                        email = _get_one_row_from_table("uidemails", value_id)
+                        name = _get_one_row_from_table("uidnames", value_id)
+                        uri = _get_one_row_from_table("uiduris", value_id)
                         # Now time to find any certification for the uid value
                         # TODO: Write a join query in future please
                         csql = "SELECT id, ctype, creation FROM uidcerts WHERE key_id=? and value_id=?"
@@ -856,8 +885,6 @@ class KeyStore:
         else:
             raise KeyNotFoundError("The key(s) not found in the keystore.")
 
-
-
     def get_all_keys(self) -> list[Key]:
         "Returns a list of keys"
         return self._internal_get_key(allkeys=True)
@@ -897,7 +924,7 @@ class KeyStore:
                         results.append(key)
             elif qtype == "name":
                 sql = "SELECT id, key_id FROM uidenames where value=?"
-                rows= session.fetch(sql, (qvalue,))
+                rows = session.fetch(sql, (qvalue,))
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
@@ -918,14 +945,14 @@ class KeyStore:
     def create_key(
         self,
         password: str,
-        uids: list[str]| str| None = [],
+        uids: list[str] | str | None = [],
         ciphersuite: Cipher = Cipher.RSA4k,
-        creation: datetime| None=None,
-        expiration: datetime | None=None,
-        subkeys_expiration: bool =False,
-        whichkeys: int =7,
-        can_primary_sign: bool =False,
-        can_primary_expire: bool=False,
+        creation: datetime | None = None,
+        expiration: datetime | None = None,
+        subkeys_expiration: bool = False,
+        whichkeys: int = 7,
+        can_primary_sign: bool = False,
+        can_primary_expire: bool = False,
     ) -> Key:
         """Returns a public `Key` object after creating a new key in the store
 
@@ -976,7 +1003,7 @@ class KeyStore:
         # TODO: should we remove the key_filename from the disk?
         return key
 
-    def delete_key(self, key: str| Key):
+    def delete_key(self, key: str | Key):
         """Deletes a given key based on the fingerprint.
 
         :param key: Either str representation of the fingerprint or a Key object
@@ -997,14 +1024,16 @@ class KeyStore:
             result = session.fetch_one_or_none(sql, (fingerprint,))
             if result:
                 keyid = result["id"]
-                _= session.execute("DELETE FROM keys where fingerprint=?", (fingerprint,))
-                _= session.execute("DELETE FROM subkeys where key_id=?", (keyid,))
-                _= session.execute("DELETE FROM uidvalues where key_id=?", (keyid,))
-                _= session.execute("DELETE FROM uidcerts where key_id=?", (keyid,))
-                _= session.execute("DELETE FROM uidcertlist where key_id=?", (keyid,))
-                _= session.execute("DELETE FROM uidemails where key_id=?", (keyid,))
-                _= session.execute("DELETE FROM uidnames where key_id=?", (keyid,))
-                _= session.execute("DELETE FROM uiduris where key_id=?", (keyid,))
+                _ = session.execute(
+                    "DELETE FROM keys where fingerprint=?", (fingerprint,)
+                )
+                _ = session.execute("DELETE FROM subkeys where key_id=?", (keyid,))
+                _ = session.execute("DELETE FROM uidvalues where key_id=?", (keyid,))
+                _ = session.execute("DELETE FROM uidcerts where key_id=?", (keyid,))
+                _ = session.execute("DELETE FROM uidcertlist where key_id=?", (keyid,))
+                _ = session.execute("DELETE FROM uidemails where key_id=?", (keyid,))
+                _ = session.execute("DELETE FROM uidnames where key_id=?", (keyid,))
+                _ = session.execute("DELETE FROM uiduris where key_id=?", (keyid,))
 
     def _find_keys(self, keys: Sequence[Key | str]):
         "To find all the key paths"
@@ -1019,10 +1048,10 @@ class KeyStore:
 
     def encrypt(
         self,
-        keys: list[Key]| Key,
-        data: str| bytes,
-        outputfile: str| bytes = "",
-        armor: bool | None =True,
+        keys: list[Key] | Key,
+        data: str | bytes,
+        outputfile: str | bytes = "",
+        armor: bool | None = True,
     ):
         """Encrypts the given data with the list of keys and returns the output.
 
@@ -1054,7 +1083,7 @@ class KeyStore:
 
         return encrypt_bytes_to_file(final_key_paths, finaldata, encrypted_file, armor)
 
-    def decrypt(self, key: str| Key, data: bytes, password: str="") -> bytes:
+    def decrypt(self, key: str | Key, data: bytes, password: str = "") -> bytes:
         """Decrypts the given bytes and returns plain text bytes.
 
         :param key: Fingerprint or secret Key object
@@ -1074,7 +1103,13 @@ class KeyStore:
         jp = Johnny(k.keyvalue)
         return jp.decrypt_bytes(data, password)
 
-    def encrypt_file(self, keys: Key | list[Key], inputfilepath: StrOrBytesPath | BinaryIO  , outputfilepath: str|bytes, armor: bool=True):
+    def encrypt_file(
+        self,
+        keys: Key | list[Key],
+        inputfilepath: StrOrBytesPath | BinaryIO,
+        outputfilepath: str | bytes,
+        armor: bool = True,
+    ):
         """Encrypts the given data with the list of keys and writes in the output file.
 
         :param keys: List of fingerprints or Key objects
@@ -1122,8 +1157,12 @@ class KeyStore:
         return True
 
     def decrypt_file(
-            self, key: str | Key, encrypted_path: StrOrBytesPath | BinaryIO, outputfile: str , password: str=""
-            )->bool | bytes:
+        self,
+        key: str | Key,
+        encrypted_path: StrOrBytesPath | BinaryIO,
+        outputfile: str,
+        password: str = "",
+    ) -> bool | bytes:
         """Decryptes the given file to the output path.
 
         :param key: Fingerprint or secret Key object
@@ -1171,7 +1210,7 @@ class KeyStore:
             assert fh is not None
             return jp.decrypt_filehandler(fh, outputpath, password)
 
-    def sign_detached(self, key: str | Key, data: str|bytes, password: str)-> str:
+    def sign_detached(self, key: str | Key, data: str | bytes, password: str) -> str:
         """Signs the given data with the key.
 
         :param key: Fingerprint or secret Key object
@@ -1196,9 +1235,7 @@ class KeyStore:
         jp = Johnny(k.keyvalue)
         return jp.sign_bytes_detached(data, password)
 
-    def verify(
-        self, key: str | Key, data: str|bytes, signature: str | None
-    ) -> bool:
+    def verify(self, key: str | Key, data: str | bytes, signature: str | None) -> bool:
         """Verifies the given data and the signature
 
         :param key: Fingerprint or public Key object
@@ -1224,10 +1261,10 @@ class KeyStore:
     def sign_file(
         self,
         key: str | Key,
-        filepath: str|bytes,
-        outputpath: str|bytes,
+        filepath: str | bytes,
+        outputpath: str | bytes,
         password: str,
-        cleartext: bool=False,
+        cleartext: bool = False,
     ) -> bool:
         """Signs the given input file with key and saves in the outputpath.
 
@@ -1274,9 +1311,9 @@ class KeyStore:
     def sign_file_detached(
         self,
         key: str | Key,
-        filepath: str|bytes,
+        filepath: str | bytes,
         password: str,
-        write: bool=False,
+        write: bool = False,
     ):
         """Signs the given data with the key. It also writes filename.asc in the same directory of the file as the signature if write value is True.
 
@@ -1316,7 +1353,7 @@ class KeyStore:
         return signature
 
     def verify_file_detached(
-            self, key: str | Key, filepath: str|bytes, signature_path: StrOrBytesPath
+        self, key: str | Key, filepath: str | bytes, signature_path: StrOrBytesPath
     ):
         """Verifies the given filepath based on the signature file.
 
@@ -1347,7 +1384,7 @@ class KeyStore:
         jp = Johnny(k.keyvalue)
         return jp.verify_file_detached(filepath, signature_in_bytes)
 
-    def verify_file(self, key: str | Key, filepath: bytes|str) -> bool:
+    def verify_file(self, key: str | Key, filepath: bytes | str) -> bool:
         """Verifies the given filepath.
 
         :param key: Fingerprint or public Key object
@@ -1371,9 +1408,7 @@ class KeyStore:
         jp = Johnny(k.keyvalue)
         return jp.verify_file(input_filepath)
 
-    def verify_and_extract_bytes(
-        self, key: str | Key, data: str|bytes
-    ) -> bytes:
+    def verify_and_extract_bytes(self, key: str | Key, data: str | bytes) -> bytes:
         """Verifies the given data and returns the acutal data.
 
         :param key: Fingerprint or public Key object.
@@ -1393,7 +1428,7 @@ class KeyStore:
         return jp.verify_and_extract_bytes(data)
 
     def verify_and_extract_file(
-        self, key: str | Key, filepath: str|bytes, output: bytes
+        self, key: str | Key, filepath: str | bytes, output: bytes
     ) -> bool:
         """Verifies the given signed file and saves the actual data in output.
 
@@ -1492,39 +1527,34 @@ class KeyStore:
         data = get_card_details()
         if not data["serial_number"]:
             return "No data found."
-        con = sqlite3.connect(self.dbpath)
-        con.row_factory = sqlite3.Row
-        with con:
-            cursor = con.cursor()
+        with self.spec.provide_session(self.config) as session:
             # First let us check if a key already exists
             sql = "SELECT DISTINCT key_id, fingerprint FROM subkeys where fingerprint IN (?, ?, ?)"
             sig_f = convert_fingerprint(data["sig_f"])
             enc_f = convert_fingerprint(data["enc_f"])
             auth_f = convert_fingerprint(data["auth_f"])
-            _ =cursor.execute(sql, (sig_f, enc_f, auth_f))
-            fromdb = cursor.fetchone()
+            fromdb = session.fetch_one_or_none(sql, (sig_f, enc_f, auth_f))
             if fromdb:
                 # Means we found the main key, now we have to mark it with the serial number of the card
                 sql = "UPDATE keys SET oncard=? WHERE id=?"
-                _ = cursor.execute(sql, (data["serial_number"], fromdb["key_id"]))
+                _ = session.execute(sql, (data["serial_number"], fromdb["key_id"]))
                 sql = "SELECT fingerprint from keys where id=?"
-                _ = cursor.execute(sql, (fromdb["key_id"],))
-            result = cursor.fetchone()
+                result = session.fetch_one(sql, (fromdb["key_id"],))
+            # result = cursor.fetchone()
             fingerprint = result["fingerprint"]
             # Now let us see if we can find the primary key on the card
             sql = "SELECT DISTINCT id, fingerprint FROM keys where fingerprint IN (?, ?, ?)"
             sig_f = convert_fingerprint(data["sig_f"])
             enc_f = convert_fingerprint(data["enc_f"])
             auth_f = convert_fingerprint(data["auth_f"])
-            _ = cursor.execute(sql, (sig_f, enc_f, auth_f))
-            fromdb = cursor.fetchone()
+            fromdb = session.fetch_one_or_none(sql, (sig_f, enc_f, auth_f))
             if fromdb:
                 # Means we found the main key, now we have to mark it with the serial number of the card
                 sql = "UPDATE keys SET primary_on_card=? WHERE id=?"
-                _ = cursor.execute(sql, (data["serial_number"], fromdb["id"]))
+                _ = session.execute(sql, (data["serial_number"], fromdb["id"]))
                 sql = "SELECT fingerprint from keys where id=?"
-                _ = cursor.execute(sql, (fromdb["id"],))
-            result = cursor.fetchone()
+                _ = session.execute(sql, (fromdb["id"],))
+            result = session.fetch_one()
             fingerprint = result["fingerprint"]
 
             return fingerprint
