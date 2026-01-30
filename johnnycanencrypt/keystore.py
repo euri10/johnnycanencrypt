@@ -622,8 +622,8 @@ class KeyStore:
             )  # Now we will mark this userid as revoked
 
             revoked = 1
-            sql = "UPDATE uidvalues set revoked=? where id=?"
-            _revoked = session.execute(sql, (revoked, value_id))
+            sql = "UPDATE uidvalues set revoked=? where id=? returning *"
+            _revoked = session.fetch(sql, (revoked, value_id))
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
@@ -750,7 +750,7 @@ class KeyStore:
                     uids = []
                     for row in uidvalues:
                         value_id = row.id
-                        revoked = row.revoked is True
+                        revoked = True if row.revoked else False
                         def _get_one_row_from_table(tablename, value_id):
                             "Internal function to select different uid items"
                             sql = f"SELECT value FROM {tablename} where value_id={value_id}"
