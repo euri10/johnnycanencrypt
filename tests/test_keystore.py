@@ -465,19 +465,18 @@ def test_ks_userid_signing(tmp_path: Path):
 
 
 def test_ks_creation_expiration_time(tmp_path: Path):
+    """
+    Tests via Kushal's key and a new key
+    """
     dbpath = tmp_path / "jce.db"
     spec = SQLSpec()
     config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
     ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    """
-    Tests via Kushal's key and a new key
-    """
     # These two are known values from kushal
     etime = datetime.datetime(2020, 10, 16, 20, 53, 47)
     ctime = datetime.datetime(2017, 10, 17, 20, 53, 47)
     # First let us check from the file
     keypath = BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"
-    ks = jce.KeyStore(tmp_path)
     k = ks.import_key(keypath)
     assert k.expirationtime
     assert k.creationtime
@@ -558,7 +557,9 @@ def test_ks_creation_expiration_time(tmp_path: Path):
 
 
 def test_get_all_keys():
-    ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store")
+    spec = SQLSpec()
+    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
+    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
     keys = ks.get_all_keys()
     assert 3 == len(keys)
     # TODO: add more checks here in future
@@ -566,7 +567,9 @@ def test_get_all_keys():
 
 def test_get_pub_key():
     """Verifies that we export only the public key part from any key"""
-    ks = jce.KeyStore(BASE_TESTSDIR / "files" / "store")
+    spec = SQLSpec()
+    config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
+    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
     fingerprint = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     key = ks.get_key(fingerprint)
     # verify that the key is a secret
@@ -583,7 +586,6 @@ def test_add_userid(tmp_path: Path):
     spec = SQLSpec()
     config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
     ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
-    ks = jce.KeyStore(tmp_path)
     key = ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
     # check that there is only one userid
     assert len(key.uids) == 1

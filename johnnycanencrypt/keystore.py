@@ -548,18 +548,16 @@ class KeyStore:
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
         with open(key_filename, "wb") as fobj:
             _ = fobj.write(newcert)
-        con = sqlite3.connect(self.dbpath)
-        with con:
-            cursor = con.cursor()
+        with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
             sql = "UPDATE keys set keyvalue=? where fingerprint=?"
-            _ = cursor.execute(sql, (newcert, key.fingerprint))
+            _ = session.execute(sql, (newcert, key.fingerprint))
             # Now we need the key_id from the database table
-            _ =  cursor.execute(
+            key_id =  session.fetch_value(
                 "SELECT id from keys where fingerprint=?", (key.fingerprint,)
             )
-            fromdb = cursor.fetchone()
-            key_id = fromdb[0]
+            # fromdb = cursor.fetchone()
+            # key_id = fromdb[0]
             # Now loop through the new userids and find the new one
             for uid in uids:
                 if "value" in uid and uid["value"]:
@@ -569,9 +567,8 @@ class KeyStore:
                     # Ok, now we have a new user id, we can start adding this value to the database
                     # this next line does not make sense for a new user id :)
                     revoked = 1 if uid["revoked"] else 0
-                    sql = "INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?)"
-                    _ = cursor.execute(sql, (uid["value"], revoked, key_id))
-                    value_id = cursor.lastrowid
+                    sql = "INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?) returning id"
+                    value_id = session.fetch_value(sql, (uid["value"], revoked, key_id))
                 else:
                     # If no value, then we can skip the rest
                     continue
@@ -580,8 +577,7 @@ class KeyStore:
                         tablename = f"uid{uid_keyname}s"
                         value = uid[uid_keyname]
                         sql = f"INSERT INTO {tablename} (value, key_id, value_id) values (?, ?, ?)"
-                        _ = cursor.execute(sql, (value, key_id, value_id))
-        con.close()
+                        _ = session.execute(sql, (value, key_id, value_id))
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
