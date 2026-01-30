@@ -4,7 +4,6 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from sqlspec.exceptions import SQLSpecError
 import vcr  # pyright: ignore[reportMissingTypeStubs]
 
 import johnnycanencrypt as jce

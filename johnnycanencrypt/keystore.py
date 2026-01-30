@@ -2,7 +2,6 @@
 from dataclasses import dataclass
 import logging
 import os
-import shutil
 import sqlite3
 from collections.abc import Sequence
 from datetime import datetime
@@ -71,7 +70,7 @@ class KeyStore:
                 fromdb = session.fetch_one("SELECT * from dbupgrade")
                 if fromdb["upgradedate"] < DB_UPGRADE_DATE:  # Means old db schema
                     should_we = True
-            except SQLSpecError as e:  # Means the table is not there.
+            except SQLSpecError:  # Means the table is not there.
                 should_we = True
                 _ = session.execute_script(createdb)
                 # we have to insert the date when this database schema was generated
@@ -385,12 +384,12 @@ class KeyStore:
                                 else ""
                             )
                             sql = "INSERT INTO uidcerts (ctype, creation, key_id, value_id) values (?, ?, ?, ?) returning *"
-                            ucert = session.fetch_one(
+                            uc = session.fetch_one(
                                 sql,
                                 (ucert["certification_type"], ctime, key_id, value_id),
                             )
                             # This is the ID of the certification we just added to the database
-                            ucert_id = ucert["id"]
+                            ucert_id = uc["id"]
                             # Now time to loop over the details and add them
                             for citem in ucert["certification_list"]:
                                 # citem is like [('fingerprint', 'F7FC698FAAE2D2EFBECDE98ED1B3ADC0E0238CA6'), ('keyid', 'D1B3ADC0E0238CA6')]
@@ -775,7 +774,7 @@ class KeyStore:
                         # Now time to find any certification for the uid value
                         # TODO: Write a join query in future please
                         csql = "SELECT id, ctype, creation FROM uidcerts WHERE key_id=? and value_id=?"
-                        certrows = session.fetch(csql, (key_id, value_id))
+                        certrows = session.fetch(csql, key_id, value_id)
                         # let us loop over all the certs
                         certifications = []
                         for uidcert in certrows:
