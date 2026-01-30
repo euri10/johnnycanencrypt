@@ -1,11 +1,12 @@
 import datetime
 import shutil
-import sqlite3
 from pathlib import Path
 
 import pytest
 import vcr  # pyright: ignore[reportMissingTypeStubs]
 
+from sqlspec import SQLSpec
+from sqlspec.adapters.sqlite import SqliteConfig
 import johnnycanencrypt as jce
 import johnnycanencrypt.johnnycanencrypt as rjce
 from johnnycanencrypt.key import SignatureType
@@ -15,8 +16,6 @@ from tests.utils import verify_files
 
 DATA = "Kushal loves 🦀"
 
-from sqlspec import SQLSpec
-from sqlspec.adapters.sqlite import SqliteConfig
 
 def test_correct_keystore_path():
     spec = SQLSpec()
@@ -709,7 +708,7 @@ def test_ks_upgrade(tmp_path: Path):
     dbpath = tmp_path / "jce.db"
     spec = SQLSpec()
     config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+    _ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
     # First we will check if this db schema is old or not
     with spec.provide_session(config) as session:
         sql = "SELECT * from dbupgrade"
@@ -733,7 +732,7 @@ def test_ks_upgrade_failure(tmp_path: Path):
 def test_get_encrypted_for():
     spec = SQLSpec()
     config = spec.add_config(SqliteConfig(connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}))
-    ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+    _ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
 
     keyids = rjce.file_encrypted_for(
         str(BASE_TESTSDIR / "files" / "double_recipient.asc")

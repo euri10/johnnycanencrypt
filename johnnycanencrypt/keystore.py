@@ -81,7 +81,7 @@ class KeyStore:
             # Now check if we should upgrade if yes, then do this.
             if should_we:
                 # First read all the existing keys
-                existing_records = session.fetch("SELECT * from KEYS")
+                _existing_records = session.fetch("SELECT * from KEYS")
             else:
                 return should_we
 
