@@ -10,7 +10,6 @@ from sqlspec.adapters.sqlite import SqliteConfig
 import johnnycanencrypt as jce
 import johnnycanencrypt.johnnycanencrypt as rjce
 from johnnycanencrypt.key import SignatureType
-from johnnycanencrypt.utils import DB_UPGRADE_DATE
 from tests.conftest import BASE_TESTSDIR
 from tests.utils import verify_files
 
@@ -25,7 +24,7 @@ def ks():
             connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
         )
     )
-    _ks = jce.KeyStore(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+    _ks = jce.KeyStore.create(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
     return _ks
 
 
@@ -34,7 +33,7 @@ def tmp_ks(tmp_path: Path):
     dbpath = tmp_path / "jce.db"
     spec = SQLSpec()
     config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+    ks = jce.KeyStore.create(spec=spec, config=config, path=tmp_path)
     return ks
 
 
@@ -46,7 +45,7 @@ def tmp_ks_mixed(tmp_path: Path):
             connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
         )
     )
-    ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+    ks = jce.KeyStore.create(spec=spec, config=config, path=tmp_path)
     return ks
 
 
@@ -624,31 +623,31 @@ def test_key_with_multiple_uids(tmp_ks: jce.KeyStore):
     assert len(uids) == 3
 
 
-def test_ks_upgrade(tmp_ks: jce.KeyStore, tmp_path: Path):
-    "tests db upgrade from an old db"
-    # copy db
-    shutil.copy(BASE_TESTSDIR / "files" / "store" / "oldjce.db", tmp_path / "jce.db")
-
-    # First we will check if this db schema is old or not
-    with tmp_ks.spec.provide_session(tmp_ks.config) as session:
-        sql = "SELECT * from dbupgrade"
-        fromdb = session.fetch_one(sql)
-        assert fromdb["upgradedate"] == DB_UPGRADE_DATE
-    # TODO: Now verify the keys inside of the new db, in full.
-
-
-def test_ks_upgrade_failure(tmp_path: Path):
-    "tests db upgrade failure from an old db because of existing file"
-    shutil.copy(BASE_TESTSDIR / "files" / "store" / "oldjce.db", tmp_path / "jce.db")
-    shutil.copy(
-        BASE_TESTSDIR / "files" / "store" / "oldjce.db", tmp_path / "jce_upgrade.db"
-    )
-    with pytest.raises(RuntimeError):
-        spec = SQLSpec()
-        config = spec.add_config(
-            SqliteConfig(connection_config={"database": tmp_path / "jce.db"})
-        )
-        _ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
+# def test_ks_upgrade(tmp_ks: jce.KeyStore, tmp_path: Path):
+#     "tests db upgrade from an old db"
+#     # copy db
+#     shutil.copy(BASE_TESTSDIR / "files" / "store" / "oldjce.db", tmp_path / "jce.db")
+#
+#     # First we will check if this db schema is old or not
+#     with tmp_ks.spec.provide_session(tmp_ks.config) as session:
+#         sql = "SELECT * from dbupgrade"
+#         fromdb = session.fetch_one(sql)
+#         assert fromdb["upgradedate"] == DB_UPGRADE_DATE
+#     # TODO: Now verify the keys inside of the new db, in full.
+#
+#
+# def test_ks_upgrade_failure(tmp_path: Path):
+#     "tests db upgrade failure from an old db because of existing file"
+#     shutil.copy(BASE_TESTSDIR / "files" / "store" / "oldjce.db", tmp_path / "jce.db")
+#     shutil.copy(
+#         BASE_TESTSDIR / "files" / "store" / "oldjce.db", tmp_path / "jce_upgrade.db"
+#     )
+#     with pytest.raises(RuntimeError):
+#         spec = SQLSpec()
+#         config = spec.add_config(
+#             SqliteConfig(connection_config={"database": tmp_path / "jce.db"})
+#         )
+#         _ks = jce.KeyStore(spec=spec, config=config, path=tmp_path)
 
 
 def test_get_encrypted_for():

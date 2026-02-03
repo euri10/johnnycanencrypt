@@ -21,10 +21,10 @@ classifiers = [
 ]
 authors = [{name="Kushal Das", email="mail@kushaldas.in"}]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "httpx",
-    "sqlspec>=0.26.0",
+    "sqlspec[asyncpg]>=0.38.4",
     "tzdata",
 ]
 

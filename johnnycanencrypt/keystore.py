@@ -6,7 +6,7 @@ import os
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Any, BinaryIO, override
+from typing import Any, BinaryIO, Self, override
 from urllib.parse import quote
 
 import httpx
@@ -16,9 +16,7 @@ from sqlspec.exceptions import SQLSpecError
 from johnnycanencrypt.exceptions import FetchingError, KeyNotFoundError
 from johnnycanencrypt.key import Cipher, Key, KeyType, SignatureType, StrOrBytesPath
 from johnnycanencrypt.utils import (
-    DB_UPGRADE_DATE,
     convert_fingerprint,
-    createdb,
     to_sort_by_expiry,
 )
 
@@ -62,163 +60,30 @@ class KeyStore:
         path: Path,
     ) -> None:
         self.spec = spec
+        migration_config={"script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/"}
+        config.migration_config = migration_config
+        config._initialize_migration_components()
         self.config = config
         self.path = path
-        migrated = self.migrate_if_required()
-        logger.debug(f"Database migration required: {migrated}")
 
-    def migrate_if_required(self) -> bool:
-        "Migrates the database if required"
-        with self.spec.provide_session(self.config) as session:
-            should_we = False
+    @classmethod
+    def create(cls, spec: SQLSpec, config: SyncDatabaseConfig[Any, Any, Any, ], path: Path)-> Self:
+        self = cls(spec=spec, config=config, path=path)
+        print(config.migration_config)
+        current = config.get_current_migration()
+        if not current:
             try:
-                # TODO: comparison on string date is weak, change to integer later ?
-                upgradedate = session.fetch_value(
-                    "SELECT upgradedate from dbupgrade",
-                )
-                if upgradedate < DB_UPGRADE_DATE:  # Means old db schema
-                    should_we = True
-            except SQLSpecError:  # Means the table is not there.
-                should_we = True
-                try:
-                    _ = session.execute_script(createdb)
-                    # we have to insert the date when this database schema was generated
-                    _ = session.execute(
-                        "INSERT INTO dbupgrade (upgradedate) values (?)",
-                        (DB_UPGRADE_DATE,),
-                    )
-                except SQLSpecError as e2:
-                    logger.error(f"Error creating dbupgrade table: {e2}")
-                    raise RuntimeError("Failed to create dbupgrade table") from e2
-            # Now check if we should upgrade if yes, then do this.
-            if should_we:
-                # First read all the existing keys
-                _existing_records = session.fetch("SELECT * from KEYS")
-                return should_we
-            else:
-                return should_we
-        # if isinstance(path, str):
-        #     fullpath = Path(path).absolute()
-        # elif isinstance(path, bytes):
-        #     try:
-        #         fullpath = Path(path.decode("utf-8")).absolute()
-        #     except:  # noqa: E722
-        #         raise TypeError("Path must be a string or bytes or Path object.")
-        # else:
-        #     fullpath = Path(path).absolute()
-        #
-        # if not fullpath.exists():
-        #     raise OSError(f"The {fullpath} does not exist.")
-        # self.dbpath: Path = fullpath / "jce.db"
-        # self.path: Path = fullpath
-        # if not self.dbpath.exists():
-        #     con = sqlite3.connect(self.dbpath)
-        #     with con:
-        #         cursor = con.cursor()
-        #         _ = cursor.executescript(createdb)
-        #         # we have to insert the date when this database schema was generated
-        #         _ = cursor.execute(
-        #             "INSERT INTO dbupgrade (upgradedate) values (?)",
-        #             (DB_UPGRADE_DATE,),
-        #         )
-        # else:
-        #     # Now we have db already
-        #     # verify if it has the same database schema
-        #     self.upgrade_if_required()
+                config.migrate_up(echo=True)
+                print(config.migration_config)
+            except Exception as e:
+                print(f"Migration failed: {e}")
+                raise e
+        return self
+
 
     @override
     def __str__(self) -> str:
         return f"<KeyStore dbpath={self.config.connection_config}>"
-
-    # def upgrade_if_required(self) -> None:
-    #     "Upgrades the database schema if required"
-    #     oldpath = self._upgrade_if_required()
-    #     if oldpath is None:
-    #         return
-    #     os.unlink(oldpath)
-    #     # Now let us rename the file
-    #     _ = shutil.copy(self.dbpath, oldpath)
-    #     os.unlink(self.dbpath)
-    #     self.dbpath = oldpath
-    #
-    # def _upgrade_if_required(self)-> Path| None:
-    #     "Internal: Upgrades the database schema if required"
-    #     should_we = False
-    #     existing_records = []
-    #     con = sqlite3.connect(self.dbpath)
-    #     con.row_factory = sqlite3.Row
-    #     # First we will check if this db schema is old or not
-    #     with con:
-    #         cursor = con.cursor()
-    #         sql = "SELECT * from dbupgrade"
-    #         try:
-    #             _ = cursor.execute(sql)
-    #             fromdb = cursor.fetchone()
-    #             if fromdb["upgradedate"] < DB_UPGRADE_DATE:  # Means old db schema
-    #                 should_we = True
-    #         except sqlite3.OperationalError:  # Means the table is not there.
-    #             should_we = True
-    #         # Now check if we should upgrade if yes, then do this.
-    #         if should_we:
-    #             # First read all the existing keys
-    #             _ = cursor.execute("SELECT * from KEYS")
-    #             existing_records = cursor.fetchall()
-    #         else:
-    #             return None
-    #     con.close()
-    #     # Temporay db setup
-    #     oldpath = self.dbpath
-    #     self.dbpath = self.path / "jce_upgrade.db"
-    #     if self.dbpath.exists():  # Means the upgrade db already exist.
-    #         # Unrecoverable error
-    #         raise RuntimeError(
-    #             f"{self.dbpath} already exists, please remove and then try again."
-    #         )
-    #     con = sqlite3.connect(self.dbpath)
-    #     con.row_factory = sqlite3.Row
-    #     with con:
-    #         cursor = con.cursor()
-    #         _ = cursor.executescript(createdb)
-    #         # we have to insert the date when this database schema was generated
-    #         _ = cursor.execute(
-    #             "INSERT INTO dbupgrade (upgradedate) values (?)", (DB_UPGRADE_DATE,)
-    #         )
-    #     con.close()
-    #     # now let us insert our existing data
-    #     for row in existing_records:
-    #         (
-    #             uids,
-    #             fingerprint,
-    #             keytype,
-    #             expirationtime,
-    #             creationtime,
-    #             othervalues,
-    #         ) = parse_cert_bytes(row["keyvalue"])
-    #         self._save_key_info_to_db(
-    #             row["keyvalue"],
-    #             uids,
-    #             fingerprint,
-    #             keytype,
-    #             expirationtime,
-    #             creationtime,
-    #             othervalues,
-    #         )
-    #     con = sqlite3.connect(self.dbpath)
-    #     con.row_factory = sqlite3.Row
-    #     with con:
-    #         cursor = con.cursor()
-    #         for row in existing_records:
-    #             oncard = row["oncard"]
-    #             # The following because this column may not exist at all
-    #             try:
-    #                 primary_on_card = row["primary_on_card"]
-    #             except IndexError:
-    #                 primary_on_card = ""
-    #             fingerprint = row["fingerprint"]
-    #             sql = "UPDATE keys set oncard=?, primary_on_card=? where fingerprint=?"
-    #             _ = cursor.execute(sql, (oncard, primary_on_card, fingerprint))
-    #     con.close()
-    #     return oldpath
 
     def update_password(self, key: Key, password: str, newpassword: str) -> Key:
         """Updates the password of the given key and saves to the database"""
