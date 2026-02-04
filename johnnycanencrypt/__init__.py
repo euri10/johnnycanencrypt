@@ -4,6 +4,7 @@
 
 from johnnycanencrypt.key import Cipher, KeyType
 from johnnycanencrypt.keystore import KeyStore
+from johnnycanencrypt.async_keystore import AsyncKeyStore
 from johnnycanencrypt.exceptions import KeyNotFoundError
 
 from johnnycanencrypt.johnnycanencrypt import parse_cert_bytes, parse_cert_file
@@ -11,6 +12,7 @@ from johnnycanencrypt.utils import convert_fingerprint
 
 __all__ = [
     "KeyStore",
+    "AsyncKeyStore",
     "KeyNotFoundError",
     "Cipher",
     "KeyType",

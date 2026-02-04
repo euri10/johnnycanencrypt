@@ -39,6 +39,10 @@ package = false
 version = "literal: pyproject.toml: project.version"
 format = "md"
 
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config"
+
+
 [dependency-groups]
 dev = [
     "pytest",
@@ -54,4 +58,5 @@ dev = [
     "ruff",
     "basedpyright>=1.37.2",
     "coverage>=7.10.7",
+    "sqlfluff>=4.0.0",
 ]
