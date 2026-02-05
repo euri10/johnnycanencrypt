@@ -17,6 +17,7 @@ DATA = "Kushal loves 🦀"
 
 pytestmark = pytest.mark.anyio
 
+
 @pytest.fixture
 async def ks():
     spec = SQLSpec()
@@ -26,7 +27,9 @@ async def ks():
         )
     )
     # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"}))
-    _ks = await jce.AsyncKeyStore.create(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+    _ks = await jce.AsyncKeyStore.create(
+        spec=spec, config=config, path=BASE_TESTSDIR / "files/store"
+    )
     return _ks
 
 
@@ -115,7 +118,9 @@ async def test_keystore_lifecycle(tmp_ks: jce.AsyncKeyStore):
     assert (2, 1) == await tmp_ks.details()
 
     # Now verify email cache
-    key_via_fingerprint = await tmp_ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    key_via_fingerprint = await tmp_ks.get_key(
+        "A85FF376759C994A8A1168D8D8219C8C43F6C5E1"
+    )
     keys_via_emails = await tmp_ks.get_keys(qvalue="kushaldas@gmail.com", qtype="email")
     assert len(keys_via_emails) == 1
     assert key_via_fingerprint == keys_via_emails[0]
@@ -124,7 +129,9 @@ async def test_keystore_lifecycle(tmp_ks: jce.AsyncKeyStore):
     assert key_via_fingerprint.can_primary_sign
 
     # Now verify name cache
-    key_via_fingerprint = await tmp_ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    key_via_fingerprint = await tmp_ks.get_key(
+        "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
+    )
     keys_via_names = await tmp_ks.get_keys(
         qvalue="Test User2 <random@example.com>", qtype="value"
     )
@@ -153,19 +160,19 @@ async def test_keystore_details(ks: jce.AsyncKeyStore):
 
 
 async def test_keystore_keyids(ks: jce.AsyncKeyStore):
-    key = await  ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    key = await ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
     assert key.keyid == "D8219C8C43F6C5E1"
 
 
 async def test_keystore_get_via_keyids(ks: jce.AsyncKeyStore):
-    key =await ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
-    keys =await ks.get_keys_by_keyid("FB82AA5D326DA75D")  # pyright: ignore[reportUnknownVariableType]
+    key = await ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    keys = await ks.get_keys_by_keyid("FB82AA5D326DA75D")  # pyright: ignore[reportUnknownVariableType]
     assert len(keys) == 1  # pyright: ignore[reportUnknownArgumentType]
     assert key == keys[0]
 
 
 async def test_keystore_key_uids(ks: jce.AsyncKeyStore):
-    key =await ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
+    key = await ks.get_key("A85FF376759C994A8A1168D8D8219C8C43F6C5E1")
     assert "kushal@fedoraproject.org" == key.uids[0]["email"]
     assert "mail@kushaldas.in" == key.uids[-1]["email"]
 
@@ -210,7 +217,7 @@ async def test_key_deletion_cleanup(tmp_ks: jce.AsyncKeyStore):
 
 
 async def test_key_equality(ks: jce.AsyncKeyStore):
-    key =await ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    key = await ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     assert key.fingerprint == "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
 
 
@@ -224,7 +231,9 @@ async def test_ks_update_expiry_time_for_subkeys(tmp_ks: jce.AsyncKeyStore):
         "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F",
     ]
     newexpiration = datetime.datetime(2050, 10, 25, 10)
-    newkey = await tmp_ks.update_expiry_in_subkeys(key, subkeys, newexpiration, "redhat")
+    newkey = await tmp_ks.update_expiry_in_subkeys(
+        key, subkeys, newexpiration, "redhat"
+    )
     assert newkey.othervalues
     for _, skey in newkey.othervalues["subkeys"].items():  # pyright: ignore[reportAny]
         if skey[0] == "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F":
@@ -249,52 +258,48 @@ async def test_ks_update_expiry_time_for_primary(tmp_ks: jce.AsyncKeyStore):
 
 async def test_ks_encrypt_decrypt_bytes(ks: jce.AsyncKeyStore):
     "Encrypts and decrypt some bytes"
-    public_key =await ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    encrypted =await ks.encrypt(public_key, DATA)
+    public_key = await ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    encrypted = await ks.encrypt(public_key, DATA)
     assert isinstance(encrypted, bytes)
     assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
-    secret_key =await ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    decrypted_bytes =await  ks.decrypt(secret_key, encrypted, password="redhat")
-    decrypted_text = decrypted_bytes.decode(
-        "utf-8"
-    )
+    secret_key = await ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    decrypted_bytes = await ks.decrypt(secret_key, encrypted, password="redhat")
+    decrypted_text = decrypted_bytes.decode("utf-8")
     assert DATA == decrypted_text
 
 
 async def test_ks_encrypt_decrypt_bytes_multiple_recipients(ks: jce.AsyncKeyStore):
     "Encrypts and decrypt some bytes"
-    key1 =await ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    key2 =await ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    encrypted =await ks.encrypt([key1, key2], DATA)
+    key1 = await ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    key2 = await ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    encrypted = await ks.encrypt([key1, key2], DATA)
     assert isinstance(encrypted, bytes)
     assert encrypted.startswith(b"-----BEGIN PGP MESSAGE-----\n")
-    secret_key1 =await ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    decrypted_bytes =await ks.decrypt(secret_key1, encrypted, password="redhat")
-    decrypted_text = decrypted_bytes.decode(
-        "utf-8"
-    )
+    secret_key1 = await ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    decrypted_bytes = await ks.decrypt(secret_key1, encrypted, password="redhat")
+    decrypted_text = decrypted_bytes.decode("utf-8")
     assert DATA == decrypted_text
-    secret_key2 =await ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    decrypted_bytes =await ks.decrypt(secret_key2, encrypted, password="redhat")
-    decrypted_text =decrypted_bytes.decode(
-        "utf-8"
-    )
+    secret_key2 = await ks.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    decrypted_bytes = await ks.decrypt(secret_key2, encrypted, password="redhat")
+    decrypted_text = decrypted_bytes.decode("utf-8")
 
     assert DATA == decrypted_text
 
 
-async def test_ks_encrypt_decrypt_bytes_to_file(tmp_ks_mixed: jce.AsyncKeyStore, tmp_path: Path):
+async def test_ks_encrypt_decrypt_bytes_to_file(
+    tmp_ks_mixed: jce.AsyncKeyStore, tmp_path: Path
+):
     "Encrypts and decrypt some bytes"
     outputfile = tmp_path / "encrypted.asc"
     secret_key = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     assert await tmp_ks_mixed.encrypt(secret_key, DATA, outputfile=str(outputfile))
     with open(outputfile, "rb") as fobj:
         encrypted = fobj.read()
-    secret_key =await  tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    decrypted_bytes =await  tmp_ks_mixed.decrypt(
+    secret_key = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    decrypted_bytes = await tmp_ks_mixed.decrypt(
         secret_key, encrypted, password="redhat"
     )
-    decrypted_text= decrypted_bytes.decode("utf-8")
+    decrypted_text = decrypted_bytes.decode("utf-8")
     assert DATA == decrypted_text
 
 
@@ -305,7 +310,7 @@ async def test_ks_encrypt_decrypt_bytes_to_file_multiple_recipients(
 
     outputfile = tmp_path / "encrypted.asc"
     key1 = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    key2 =  await tmp_ks_mixed.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    key2 = await tmp_ks_mixed.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     assert await tmp_ks_mixed.encrypt([key1, key2], DATA, outputfile=str(outputfile))
     with open(outputfile, "rb") as fobj:
         encrypted = fobj.read()
@@ -324,7 +329,7 @@ async def test_ks_encrypt_decrypt_file(tmp_ks_mixed: jce.AsyncKeyStore, tmp_path
     decrypted_output = tmp_path / "text.txt"
 
     public_key = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    assert  await tmp_ks_mixed.encrypt_file(public_key, str(inputfile), str(output))
+    assert await tmp_ks_mixed.encrypt_file(public_key, str(inputfile), str(output))
     secret_key = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     _ = tmp_ks_mixed.decrypt_file(
         secret_key, str(output), str(decrypted_output), password="redhat"
@@ -332,16 +337,18 @@ async def test_ks_encrypt_decrypt_file(tmp_ks_mixed: jce.AsyncKeyStore, tmp_path
     verify_files(inputfile, decrypted_output)
 
 
-async def test_ks_encrypt_decrypt_filehandler(tmp_ks_mixed: jce.AsyncKeyStore, tmp_path: Path):
+async def test_ks_encrypt_decrypt_filehandler(
+    tmp_ks_mixed: jce.AsyncKeyStore, tmp_path: Path
+):
     "Encrypts and decrypt some bytes"
     inputfile = BASE_TESTSDIR / "files" / "text.txt"
     output = tmp_path / "text-encrypted.pgp"
     decrypted_output = tmp_path / "text.txt"
 
-    public_key =await  tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    public_key = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(inputfile, "rb") as fobj:
         assert tmp_ks_mixed.encrypt_file(public_key, fobj, str(output))
-    secret_key =await  tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    secret_key = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(output, "rb") as fobj:
         _ = tmp_ks_mixed.decrypt_file(
             secret_key, fobj, str(decrypted_output), password="redhat"
@@ -357,15 +364,17 @@ async def test_ks_encrypt_decrypt_file_multiple_recipients(
     output = tmp_path / "text-encrypted.pgp"
     decrypted_output = tmp_path / "text.txt"
 
-    key1 =await  tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    key2 =await  tmp_ks_mixed.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    _encrypted =await  tmp_ks_mixed.encrypt_file([key1, key2], str(inputfile), str(output))
-    secret_key1 =await  tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    key1 = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
+    key2 = await tmp_ks_mixed.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    _encrypted = await tmp_ks_mixed.encrypt_file(
+        [key1, key2], str(inputfile), str(output)
+    )
+    secret_key1 = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     _ = tmp_ks_mixed.decrypt_file(
         secret_key1, str(output), str(decrypted_output), password="redhat"
     )
     verify_files(inputfile, decrypted_output)
-    secret_key2 =await  tmp_ks_mixed.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    secret_key2 = await tmp_ks_mixed.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     _ = tmp_ks_mixed.decrypt_file(
         secret_key2, str(output), str(decrypted_output), password="redhat"
     )
@@ -374,24 +383,26 @@ async def test_ks_encrypt_decrypt_file_multiple_recipients(
 
 async def test_ks_sign_data(ks: jce.AsyncKeyStore):
     key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
-    signed =await   ks.sign_detached(key, "hello", "redhat")
+    signed = await ks.sign_detached(key, "hello", "redhat")
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
     assert await ks.verify(key, "hello", signed)
 
 
 async def test_ks_sign_data_fails(ks: jce.AsyncKeyStore):
     key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
-    signed =await  ks.sign_detached(key, "hello", "redhat")
+    signed = await ks.sign_detached(key, "hello", "redhat")
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
-    assert not await  ks.verify(key, "hello2", signed)
+    assert not await ks.verify(key, "hello2", signed)
 
 
-async def test_ks_sign_verify_file_detached(tmp_ks_mixed: jce.AsyncKeyStore, tmp_path: Path):
+async def test_ks_sign_verify_file_detached(
+    tmp_ks_mixed: jce.AsyncKeyStore, tmp_path: Path
+):
     inputfile = BASE_TESTSDIR / "files" / "text.txt"
     _ = shutil.copy(inputfile, tmp_path)
     key = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
     file_to_be_signed = tmp_path / "text.txt"
-    signed =await  tmp_ks_mixed.sign_file_detached(
+    signed = await tmp_ks_mixed.sign_file_detached(
         key, str(file_to_be_signed), "redhat", write=True
     )
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
@@ -450,7 +461,7 @@ async def test_ks_creation_expiration_time(tmp_ks: jce.AsyncKeyStore):
 
     # now with a new key and creation time
     ctime = datetime.datetime(2010, 10, 10, 20, 53, 47)
-    newk =await  tmp_ks.create_key(
+    newk = await tmp_ks.create_key(
         "redhat", "Another test key", ciphersuite=jce.Cipher.Cv25519, creation=ctime
     )
     assert newk.creationtime
@@ -522,7 +533,7 @@ async def test_ks_creation_expiration_time(tmp_ks: jce.AsyncKeyStore):
 
 
 async def test_get_all_keys(ks: jce.AsyncKeyStore):
-    keys =await  ks.get_all_keys()
+    keys = await ks.get_all_keys()
     assert 3 == len(keys)
     # TODO: add more checks here in future
 
@@ -530,7 +541,7 @@ async def test_get_all_keys(ks: jce.AsyncKeyStore):
 async def test_get_pub_key(ks: jce.AsyncKeyStore):
     """Verifies that we export only the public key part from any key"""
     fingerprint = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
-    key =await  ks.get_key(fingerprint)
+    key = await ks.get_key(fingerprint)
     # verify that the key is a secret
     assert key.keytype == jce.KeyType.SECRET
 
@@ -595,7 +606,7 @@ async def test_add_userid_fails_for_public(tmp_ks: jce.AsyncKeyStore):
 
 async def test_update_subkey_expiry_time(ks: jce.AsyncKeyStore):
     "Updates the expirytime for a given subkey"
-    key =await  ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
+    key = await ks.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
     fps = [
         "102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F",
     ]
@@ -675,7 +686,7 @@ async def test_get_encrypted_for():
 async def test_available_subkeys_for_no_expiration(ks: jce.AsyncKeyStore):
     """Verifies that we export only the public key part from any key"""
     fingerprint = "F51C310E02DC1B7771E176D8A1C5C364EB5B9A20"
-    key =await  ks.get_key(fingerprint)
+    key = await ks.get_key(fingerprint)
     e, s, a = key.available_subkeys()
     assert e
     assert s
@@ -694,7 +705,9 @@ async def test_available_subkeys_for_expired(tmp_ks: jce.AsyncKeyStore):
 
 @vcr.use_cassette(str(BASE_TESTSDIR / "files" / "test_fetch_key_by_fingerprint.yml"))
 async def test_fetch_key_by_fingerprint(tmp_ks: jce.AsyncKeyStore):
-    key = await tmp_ks.fetch_key_by_fingerprint("EF6E286DDA85EA2A4BA7DE684E2C6E8793298290")
+    key = await tmp_ks.fetch_key_by_fingerprint(
+        "EF6E286DDA85EA2A4BA7DE684E2C6E8793298290"
+    )
     assert len(key.uids) == 1
     uid = key.uids[0]
     assert uid["email"] == "torbrowser@torproject.org"

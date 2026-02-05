@@ -16,18 +16,28 @@ from sqlspec.exceptions import SQLSpecError
 from johnnycanencrypt.exceptions import FetchingError, KeyNotFoundError
 from johnnycanencrypt.key import Cipher, Key, KeyType, SignatureType, StrOrBytesPath
 from johnnycanencrypt.utils import (
+    DELETE_KEY_BY_FINGERPRINT,
+    DELETE_SUBBEYS_BY_KEY_ID,
     INSERT_KEY_SQL,
     INSERT_SUBKEYS_SQL,
     INSERT_UIDCERTLIST_SQL,
     INSERT_UIDCERTS_SQL,
     INSERT_UIDVALUES_SQL,
     SELECT_ALL_KEYS,
+    SELECT_ALLSUBKEYS_BY_KEY_ID,
     SELECT_KEY_BY_FINGERPRINT_SQL,
     SELECT_KEY_BY_ID_SQL,
     SELECT_KEY_BY_KEYID_SQL,
     SELECT_KEYID_SQL,
     SELECT_PUB_PRIV_COUNT_SQL,
     SELECT_SUBKEY_BY_KEYID,
+    SELECT_UIDCERT_BY_KEYID,
+    SELECT_UIDCERTLIST_BY_CERTID,
+    SELECT_UIDEMAILS_BY_VALUE,
+    SELECT_UIDNAMES_BY_VALUE,
+    SELECT_UIDURIS_BY_VALUE,
+    SELECT_UIDVALUES_BY_KEYID,
+    SELECT_UIDVALUES_BY_VALUE,
     SELECT_UIDVALUES_SQL,
     UPDATE_KEY_EXPIRATION_SQL,
     UPDATE_KEY_SQL,
@@ -78,14 +88,25 @@ class KeyStore:
         path: Path,
     ) -> None:
         self.spec = spec
-        migration_config={"script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/"}
+        migration_config = {
+            "script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/"
+        }
         config.migration_config = migration_config
         config._initialize_migration_components()
         self.config = config
         self.path = path
 
     @classmethod
-    def create(cls, spec: SQLSpec, config: SyncDatabaseConfig[Any, Any, Any, ], path: Path)-> Self:
+    def create(
+        cls,
+        spec: SQLSpec,
+        config: SyncDatabaseConfig[
+            Any,
+            Any,
+            Any,
+        ],
+        path: Path,
+    ) -> Self:
         self = cls(spec=spec, config=config, path=path)
         current = config.get_current_migration()
         if not current:
@@ -95,7 +116,6 @@ class KeyStore:
                 raise e
         return self
 
-
     @override
     def __str__(self) -> str:
         return f"<KeyStore dbpath={self.config.connection_config}>"
@@ -104,7 +124,9 @@ class KeyStore:
         """Updates the password of the given key and saves to the database"""
         cert = update_password(key.keyvalue, password, newpassword)
         with self.spec.provide_session(self.config) as session:
-            _ = session.execute(UPDATE_PASSWORD_SQL , keyvalue=cert, fingerprint=key.fingerprint)
+            _ = session.execute(
+                UPDATE_PASSWORD_SQL, keyvalue=cert, fingerprint=key.fingerprint
+            )
         assert cert != key.keyvalue
         key.keyvalue = cert
         return key
@@ -209,7 +231,7 @@ class KeyStore:
         with self.spec.provide_session(self.config) as session:
             # First let us check if a key already exists
             fromdb = session.fetch_one_or_none(
-                    SELECT_KEY_BY_FINGERPRINT_SQL,fingerprint=fingerprint
+                SELECT_KEY_BY_FINGERPRINT_SQL, fingerprint=fingerprint
             )
             if fromdb:  # Means a key is there in the db
                 key_id = fromdb["id"]
@@ -225,13 +247,20 @@ class KeyStore:
                     # We will not do anything, if you want reimport for a secret key
                     # delete the old one, and import the new one
                     raise SameKeyError(f"{fingerprint}")
-                _updated = session.execute(UPDATE_KEY_SQL, keyvalue=cert, keytype=ktype, expiration=etime, creation=ctime, id=key_id)
+                _updated = session.execute(
+                    UPDATE_KEY_SQL,
+                    keyvalue=cert,
+                    keytype=ktype,
+                    expiration=etime,
+                    creation=ctime,
+                    id=key_id,
+                )
             else:
                 # Now insert the new key and get the key_id with returning, if supported
                 # that's the reason of the try except block
                 try:
                     k = session.fetch_one_or_none(
-                         INSERT_KEY_SQL   ,
+                        INSERT_KEY_SQL,
                         keyvalue=cert,
                         fingerprint=fingerprint,
                         keyid=mainkeyid,
@@ -263,12 +292,19 @@ class KeyStore:
             for uid_keyname in ["name", "value", "email", "uri"]:
                 tablename = f"uid{uid_keyname}s"
                 # First delete all old ones
-                _ = session.execute(f"DELETE from {tablename} where key_id=:key_id", key_id=key_id)
+                _ = session.execute(
+                    f"DELETE from {tablename} where key_id=:key_id", key_id=key_id
+                )
             for uid in uids:
                 # First we will insert the value
                 if "value" in uid and uid["value"]:
                     revoked = 1 if uid["revoked"] else 0
-                    value_id = session.fetch_value(INSERT_UIDVALUES_SQL, value=uid["value"], revoked=revoked, key_id=key_id)
+                    value_id = session.fetch_value(
+                        INSERT_UIDVALUES_SQL,
+                        value=uid["value"],
+                        revoked=revoked,
+                        key_id=key_id,
+                    )
                     # After we added the value, we should check for certification
                     if len(uid["certifications"]) > 0:
                         for ucert in uid["certifications"]:
@@ -278,8 +314,11 @@ class KeyStore:
                                 else ""
                             )
                             uc = session.fetch_one(
-                                INSERT_UIDCERTS_SQL ,
-                                ctype=ucert["certification_type"], creation=ctime, key_id=key_id, value_id=value_id,
+                                INSERT_UIDCERTS_SQL,
+                                ctype=ucert["certification_type"],
+                                creation=ctime,
+                                key_id=key_id,
+                                value_id=value_id,
                             )
                             # This is the ID of the certification we just added to the database
                             ucert_id = uc["id"]
@@ -287,8 +326,12 @@ class KeyStore:
                             for citem in ucert["certification_list"]:
                                 # citem is like [('fingerprint', 'F7FC698FAAE2D2EFBECDE98ED1B3ADC0E0238CA6'), ('keyid', 'D1B3ADC0E0238CA6')]
                                 _ = session.execute(
-                                    INSERT_UIDCERTLIST_SQL ,
-                                    value=citem[1], datatype=citem[0], key_id=key_id, value_id=value_id, cert_id=ucert_id,
+                                    INSERT_UIDCERTLIST_SQL,
+                                    value=citem[1],
+                                    datatype=citem[0],
+                                    key_id=key_id,
+                                    value_id=value_id,
+                                    cert_id=ucert_id,
                                 )
                 else:
                     # If no value, then we can skip the rest
@@ -298,7 +341,9 @@ class KeyStore:
                         tablename = f"uid{uid_keyname}s"
                         value = uid[uid_keyname]
                         sql = f"INSERT INTO {tablename} (value, key_id, value_id) values (:value, :key_id, :value_id)"
-                        _ = session.execute(sql, value=value, key_id=key_id, value_id=value_id)
+                        _ = session.execute(
+                            sql, value=value, key_id=key_id, value_id=value_id
+                        )
 
     def __contains__(self, other: str | Key) -> bool:
         """Checks if a Key object of fingerprint str exists in the keystore or not.
@@ -351,15 +396,18 @@ class KeyStore:
         # Now save the key
         with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
-            _ = session.execute(UPDATE_PASSWORD_SQL , keyvalue=newcert, fingerprint=key.fingerprint)
+            _ = session.execute(
+                UPDATE_PASSWORD_SQL, keyvalue=newcert, fingerprint=key.fingerprint
+            )
             # Now we need the key_id from the database table
             # removed seems unused
             # Now let us add the subkey and keyid details
             for subkey in newsubkeys:
                 etime_str = str(subkey[3].timestamp()) if subkey[3] else ""
                 _ = session.execute(
-                    UPDATE_SUBKEY_EXPIRATION_SQL ,
-                    expiration=etime_str, fingerprint=subkey[1],
+                    UPDATE_SUBKEY_EXPIRATION_SQL,
+                    expiration=etime_str,
+                    fingerprint=subkey[1],
                 )
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
@@ -399,7 +447,9 @@ class KeyStore:
         else:
             etime_str = None
         with self.spec.provide_session(self.config) as session:
-            _ = session.execute(UPDATE_KEY_EXPIRATION_SQL , expiration=etime_str, fingerprint=fingerprint)
+            _ = session.execute(
+                UPDATE_KEY_EXPIRATION_SQL, expiration=etime_str, fingerprint=fingerprint
+            )
         return self.get_key(fingerprint)
 
     def add_userid(self, key: Key, userid: str, password: str) -> Key:
@@ -436,10 +486,11 @@ class KeyStore:
             _ = fobj.write(newcert)
         with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
-            _ = session.execute(UPDATE_PASSWORD_SQL , keyvalue=newcert, fingerprint=key.fingerprint)
-            # Now we need the key_id from the database table
-            key_id = session.fetch_value(SELECT_KEYID_SQL , fingerprint=key.fingerprint
+            _ = session.execute(
+                UPDATE_PASSWORD_SQL, keyvalue=newcert, fingerprint=key.fingerprint
             )
+            # Now we need the key_id from the database table
+            key_id = session.fetch_value(SELECT_KEYID_SQL, fingerprint=key.fingerprint)
             # Now loop through the new userids and find the new one
             for uid in uids:
                 if "value" in uid and uid["value"]:
@@ -449,7 +500,12 @@ class KeyStore:
                     # Ok, now we have a new user id, we can start adding this value to the database
                     # this next line does not make sense for a new user id :)
                     revoked = 1 if uid["revoked"] else 0
-                    value_id = session.fetch_value(INSERT_UIDVALUES_SQL , value=uid["value"], revoked=revoked, key_id=key_id)
+                    value_id = session.fetch_value(
+                        INSERT_UIDVALUES_SQL,
+                        value=uid["value"],
+                        revoked=revoked,
+                        key_id=key_id,
+                    )
                 else:
                     # If no value, then we can skip the rest
                     continue
@@ -458,7 +514,9 @@ class KeyStore:
                         tablename = f"uid{uid_keyname}s"
                         value = uid[uid_keyname]
                         sql = f"INSERT INTO {tablename} (value, key_id, value_id) values (:value, :key_id, :value_id)"
-                        _ = session.execute(sql, value=value, key_id=key_id, value_id=value_id)
+                        _ = session.execute(
+                            sql, value=value, key_id=key_id, value_id=value_id
+                        )
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
@@ -494,14 +552,18 @@ class KeyStore:
             _ = fobj.write(newcert)
         with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
-            _ = session.execute(UPDATE_PASSWORD_SQL , keyvalue=newcert,fingerprint=key.fingerprint)
+            _ = session.execute(
+                UPDATE_PASSWORD_SQL, keyvalue=newcert, fingerprint=key.fingerprint
+            )
             # Now loop through the new userids and find the new one
             value_id = session.fetch_value(
-              SELECT_UIDVALUES_SQL   , fingerprint=key.fingerprint, value=userid
+                SELECT_UIDVALUES_SQL, fingerprint=key.fingerprint, value=userid
             )
             # Now we will mark this userid as revoked
             revoked = 1
-            _revoked = session.fetch(UPDATE_REVOKED_SQL , revoked=revoked, key_id=value_id)
+            _revoked = session.fetch(
+                UPDATE_REVOKED_SQL, revoked=revoked, key_id=value_id
+            )
         # Regnerate the key object and return it
         return self.get_key(fingerprint)
 
@@ -539,7 +601,7 @@ class KeyStore:
     def details(self):
         "Returns tuple of (number_of_public, number_of_secret_keys)"
         with self.spec.provide_session(self.config) as session:
-            row = session.fetch_one(SELECT_PUB_PRIV_COUNT_SQL )
+            row = session.fetch_one(SELECT_PUB_PRIV_COUNT_SQL)
             return row["public"], row["secret"]
 
     def get_key(self, fingerprint: str) -> Key:
@@ -555,15 +617,14 @@ class KeyStore:
         with self.spec.provide_session(self.config) as session:
             keys = None
             if fingerprint:
-                keys = session.execute(SELECT_KEY_BY_FINGERPRINT_SQL,
+                keys = session.execute(
+                    SELECT_KEY_BY_FINGERPRINT_SQL,
                     fingerprint=fingerprint,
                 )
             elif key_id:
-                keys = session.execute(
-                    SELECT_KEY_BY_ID_SQL, keyid=key_id
-                )
+                keys = session.execute(SELECT_KEY_BY_ID_SQL, keyid=key_id)
             elif allkeys:  # means get all keys
-                keys = session.fetch(SELECT_ALL_KEYS )
+                keys = session.fetch(SELECT_ALL_KEYS)
             return self._internal_build_key_list(keys)
 
     def get_keys_by_keyid(self, keyid: str):
@@ -575,13 +636,13 @@ class KeyStore:
             for row in rows:
                 list_of_db_ids.add(row["id"])
 
-            rows = session.fetch(SELECT_SUBKEY_BY_KEYID ,keyid=keyid)
+            rows = session.fetch(SELECT_SUBKEY_BY_KEYID, keyid=keyid)
             for row in rows:
                 list_of_db_ids.add(row["key_id"])
             # Now the final search
             result = []
             for key_id in list(list_of_db_ids):
-                rows = session.fetch(SELECT_KEY_BY_ID_SQL ,keyid=key_id)
+                rows = session.fetch(SELECT_KEY_BY_ID_SQL, keyid=key_id)
                 result.extend(self._internal_build_key_list(rows))
 
             if not result:
@@ -593,7 +654,6 @@ class KeyStore:
         if not keys:
             raise KeyNotFoundError("The key(s) not found in the keystore.")
         finalresult = []
-        sql_for_certs = "SELECT value, datatype FROM uidcertlist WHERE cert_id=?"
         for result in keys:
             if result:
                 key_id = result["id"]
@@ -617,8 +677,9 @@ class KeyStore:
 
                 # Now get the uids
                 with self.spec.provide_session(self.config) as session:
-                    sql = "SELECT id, value, revoked FROM uidvalues WHERE key_id=?"
-                    uidvalues = session.fetch(sql, key_id, schema_type=UIDValues)
+                    uidvalues = session.fetch(
+                        SELECT_UIDVALUES_BY_KEYID, key_id=key_id, schema_type=UIDValues
+                    )
                     uids = []
                     for row in uidvalues:
                         value_id = row.id
@@ -638,8 +699,9 @@ class KeyStore:
                         uri = _get_one_row_from_table("uiduris", value_id)
                         # Now time to find any certification for the uid value
                         # TODO: Write a join query in future please
-                        csql = "SELECT id, ctype, creation FROM uidcerts WHERE key_id=? and value_id=?"
-                        certrows = session.fetch(csql, key_id, value_id)
+                        certrows = session.fetch(
+                            SELECT_UIDCERT_BY_KEYID, key_id=key_id, value_id=value_id
+                        )
                         # let us loop over all the certs
                         certifications = []
                         for uidcert in certrows:
@@ -647,7 +709,9 @@ class KeyStore:
                             cert_result["creationtime"] = uidcert["creation"]
                             cert_result["certification_type"] = uidcert["ctype"]
                             ucertid = uidcert["id"]
-                            cert_issuers = session.execute(sql_for_certs, (ucertid,))
+                            cert_issuers = session.execute(
+                                SELECT_UIDCERTLIST_BY_CERTID, cert_id=ucertid
+                            )
                             issuers = []
                             for cissuer in cert_issuers:
                                 issuers.append((cissuer["datatype"], cissuer["value"]))
@@ -668,8 +732,7 @@ class KeyStore:
                         )
 
                 # Get the subkeys
-                sql = "SELECT fingerprint, keyid, expiration, creation, keytype, revoked FROM subkeys WHERE key_id=?"
-                rows = session.fetch(sql, (key_id,))
+                rows = session.fetch(SELECT_ALLSUBKEYS_BY_KEY_ID, key_id=key_id)
                 othervalues = {}
                 subs = {}
                 sort_subkeys = []
@@ -750,8 +813,7 @@ class KeyStore:
         # TODO: Now let us search
         with self.spec.provide_session(self.config) as session:
             if qtype == "value":
-                sql = "SELECT id, key_id FROM uidvalues where value=?"
-                rows = session.fetch(sql, (qvalue,))
+                rows = session.fetch(SELECT_UIDVALUES_BY_VALUE, value=qvalue)
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
@@ -759,8 +821,7 @@ class KeyStore:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
             elif qtype == "email":
-                sql = "SELECT id, key_id FROM uidemails where value=?"
-                rows = session.fetch(sql, (qvalue,))
+                rows = session.fetch(SELECT_UIDEMAILS_BY_VALUE, value=qvalue)
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
@@ -768,8 +829,7 @@ class KeyStore:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
             elif qtype == "name":
-                sql = "SELECT id, key_id FROM uidenames where value=?"
-                rows = session.fetch(sql, (qvalue,))
+                rows = session.fetch(SELECT_UIDNAMES_BY_VALUE, value=qvalue)
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
@@ -777,8 +837,7 @@ class KeyStore:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
             elif qtype == "uri":
-                sql = "SELECT id, key_id FROM uiduris where value=?"
-                rows = session.fetch(sql, (qvalue,))
+                rows = session.fetch(SELECT_UIDURIS_BY_VALUE, value=qvalue)
                 for row in rows:
                     key_id = row["key_id"]
                     key = self._internal_get_key(key_id=key_id)[0]
@@ -865,20 +924,34 @@ class KeyStore:
                 "The key for the given fingerprint={fingerprint} is not found in the keystore"
             )
         with self.spec.provide_session(self.config) as session:
-            sql = "SELECT id from keys where fingerprint=:fingerprint"
-            result = session.fetch_one_or_none(sql, fingerprint=fingerprint)
+            result = session.fetch_one_or_none(
+                SELECT_KEYID_SQL, fingerprint=fingerprint
+            )
             if result:
                 keyid = result["id"]
+                _ = session.execute(DELETE_KEY_BY_FINGERPRINT, fingerprint=fingerprint)
                 _ = session.execute(
-                        "DELETE FROM keys where fingerprint=:fingerprint", fingerprint=fingerprint
+                    DELETE_SUBBEYS_BY_KEY_ID,
+                    key_id=keyid,
                 )
-                _ = session.execute("DELETE FROM subkeys where key_id=:key_id", key_id=keyid,)
-                _ = session.execute("DELETE FROM uidvalues where key_id=:key_id", key_id=keyid)
-                _ = session.execute("DELETE FROM uidcerts where key_id=:key_id", key_id=keyid)
-                _ = session.execute("DELETE FROM uidcertlist where key_id=:key_id", key_id=keyid)
-                _ = session.execute("DELETE FROM uidemails where key_id=:key_id", key_id=keyid)
-                _ = session.execute("DELETE FROM uidnames where key_id=:key_id", key_id=keyid)
-                _ = session.execute("DELETE FROM uiduris where key_id=:key_id", key_id=keyid)
+                _ = session.execute(
+                    "DELETE FROM uidvalues where key_id=:key_id", key_id=keyid
+                )
+                _ = session.execute(
+                    "DELETE FROM uidcerts where key_id=:key_id", key_id=keyid
+                )
+                _ = session.execute(
+                    "DELETE FROM uidcertlist where key_id=:key_id", key_id=keyid
+                )
+                _ = session.execute(
+                    "DELETE FROM uidemails where key_id=:key_id", key_id=keyid
+                )
+                _ = session.execute(
+                    "DELETE FROM uidnames where key_id=:key_id", key_id=keyid
+                )
+                _ = session.execute(
+                    "DELETE FROM uiduris where key_id=:key_id", key_id=keyid
+                )
 
     def _find_keys(self, keys: Sequence[Key | str]):
         "To find all the key paths"

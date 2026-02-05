@@ -24,7 +24,9 @@ def ks():
             connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
         )
     )
-    _ks = jce.KeyStore.create(spec=spec, config=config, path=BASE_TESTSDIR / "files/store")
+    _ks = jce.KeyStore.create(
+        spec=spec, config=config, path=BASE_TESTSDIR / "files/store"
+    )
     return _ks
 
 
@@ -103,7 +105,9 @@ def test_keystore_lifecycle(tmp_ks: jce.KeyStore):
 
     _public = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "public.asc"))
     _pgp_keys = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "pgp_keys.asc"))
-    _hellopublic = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "hellopublic.asc"))
+    _hellopublic = tmp_ks.import_key(
+        (BASE_TESTSDIR / "files" / "store" / "hellopublic.asc")
+    )
     _secret = tmp_ks.import_key((BASE_TESTSDIR / "files" / "store" / "secret.asc"))
     # Now check the numbers of keys in the store
     assert (2, 2) == tmp_ks.details()
