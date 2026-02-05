@@ -16,6 +16,20 @@ from sqlspec.exceptions import SQLSpecError
 from johnnycanencrypt.exceptions import FetchingError, KeyNotFoundError
 from johnnycanencrypt.key import Cipher, Key, KeyType, SignatureType, StrOrBytesPath
 from johnnycanencrypt.utils import (
+    INSERT_KEY_SQL,
+    INSERT_SUBKEYS_SQL,
+    INSERT_UIDCERTLIST_SQL,
+    INSERT_UIDCERTS_SQL,
+    INSERT_UIDVALUES_SQL,
+    SELECT_KEY_BY_FINGERPRINT_SQL,
+    SELECT_KEYID_SQL,
+    SELECT_PUB_PRIV_COUNT_SQL,
+    SELECT_UIDVALUES_SQL,
+    UPDATE_KEY_EXPIRATION_SQL,
+    UPDATE_KEY_SQL,
+    UPDATE_PASSWORD_SQL,
+    UPDATE_REVOKED_SQL,
+    UPDATE_SUBKEY_EXPIRATION_SQL,
     convert_fingerprint,
     to_sort_by_expiry,
 )
@@ -86,8 +100,7 @@ class AsyncKeyStore:
         """Updates the password of the given key and saves to the database"""
         cert = update_password(key.keyvalue, password, newpassword)
         async with self.spec.provide_session(self.config) as session:
-            sql = "UPDATE keys set keyvalue=? where fingerprint=?"
-            _ = await session.execute(sql, (cert, key.fingerprint))
+            _ = await session.execute(UPDATE_PASSWORD_SQL , keyvalue=cert, fingerprint=key.fingerprint)
         assert cert != key.keyvalue
         key.keyvalue = cert
         return key
@@ -192,11 +205,10 @@ class AsyncKeyStore:
         async with self.spec.provide_session(self.config) as session:
             # First let us check if a key already exists
             fromdb = await session.fetch_one_or_none(
-                "SELECT * FROM keys where fingerprint=?", fingerprint
+                    SELECT_KEY_BY_FINGERPRINT_SQL,fingerprint=fingerprint
             )
             if fromdb:  # Means a key is there in the db
                 key_id = fromdb["id"]
-                sql = "UPDATE keys SET keyvalue=?, keytype=?, expiration=?, creation=? WHERE id=?"
                 if (
                     fromdb["keytype"] == 0
                 ):  # only update if there is a public key in the store
@@ -209,53 +221,51 @@ class AsyncKeyStore:
                     # We will not do anything, if you want reimport for a secret key
                     # delete the old one, and import the new one
                     raise SameKeyError(f"{fingerprint}")
-                _ = await session.execute(sql, cert, ktype, etime, ctime, key_id)
+                _ = await session.execute(UPDATE_KEY_SQL, cert, ktype, etime, ctime, key_id)
             else:
                 # Now insert the new key and get the key_id with returning, if supported
                 # that's the reason of the try except block
                 try:
                     k = await session.fetch_one_or_none(
-                        "INSERT INTO keys (keyvalue, fingerprint, keyid, keytype, expiration, creation, can_primary_sign) VALUES(?, ?, ?, ?, ?, ?, ?) RETURNING id",
-                        cert,
-                        fingerprint,
-                        mainkeyid,
-                        ktype,
-                        etime,
-                        ctime,
-                        can_primary_sign,
+                        INSERT_KEY_SQL,
+                       keyvalue=cert,
+                        fingerprint=fingerprint,
+                        keyid=mainkeyid,
+                        keytype=ktype,
+                        expiration=etime,
+                        creation=ctime,
+                        can_primary_sign=can_primary_sign,
                     )
                     key_id = k["id"]
                 except SQLSpecError as e:
                     logger.error(f"Error inserting key: {e}")
                     raise e
             # Now let us add the subkey and keyid details
-            sql = "INSERT INTO subkeys (key_id, fingerprint, keyid, expiration, creation, keytype, revoked) VALUES(?, ?, ?, ?, ?, ?, ?)"
             for subkey in subkeys:
                 ctime = str(subkey[2].timestamp()) if subkey[2] else ""
                 etime = str(subkey[3].timestamp()) if subkey[3] else ""
                 _ = await session.execute(
-                    sql,
-                    key_id,
-                    subkey[1],
-                    subkey[0],
-                    etime,
-                    ctime,
-                    subkey[4],
-                    subkey[5],
+                    INSERT_SUBKEYS_SQL,
+                    key_id=key_id,
+                    fingerprint=subkey[1],
+                    keyid=subkey[0],
+                    expiration=etime,
+                    creation=ctime,
+                    keytype=subkey[4],
+                    revoked=subkey[5],
                 )
 
             # TODO: Now for each of the uid, add to the right dictionary
             for uid_keyname in ["name", "value", "email", "uri"]:
                 tablename = f"uid{uid_keyname}s"
                 # First delete all old ones
-                _ = await session.execute(f"DELETE from {tablename} where key_id=?", key_id)
+                _ = await session.execute(f"DELETE from {tablename} where key_id=:key_id", key_id=key_id)
             for uid in uids:
                 # First we will insert the value
                 if "value" in uid and uid["value"]:
                     revoked = 1 if uid["revoked"] else 0
                     sql = "INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?) returning id"
-                    i = await session.fetch_one_or_none(sql, uid["value"], revoked, key_id)
-                    value_id = i["id"]
+                    value_id = session.fetch_value(INSERT_UIDVALUES_SQL, value=uid["value"], revoked=revoked, key_id=key_id)
                     # After we added the value, we should check for certification
                     if len(uid["certifications"]) > 0:
                         for ucert in uid["certifications"]:
@@ -264,20 +274,18 @@ class AsyncKeyStore:
                                 if ucert["creationtime"]
                                 else ""
                             )
-                            sql = "INSERT INTO uidcerts (ctype, creation, key_id, value_id) values (?, ?, ?, ?) returning *"
                             uc = await session.fetch_one(
-                                sql,
-                                (ucert["certification_type"], ctime, key_id, value_id),
+                                INSERT_UIDCERTS_SQL ,
+                                ctype=ucert["certification_type"], creation=ctime, key_id=key_id, value_id=value_id,
                             )
                             # This is the ID of the certification we just added to the database
                             ucert_id = uc["id"]
                             # Now time to loop over the details and add them
                             for citem in ucert["certification_list"]:
                                 # citem is like [('fingerprint', 'F7FC698FAAE2D2EFBECDE98ED1B3ADC0E0238CA6'), ('keyid', 'D1B3ADC0E0238CA6')]
-                                sql = "INSERT INTO uidcertlist (value, datatype, key_id, value_id, cert_id) values (?, ?, ?, ?, ?)"
-                                _ = await session.execute(
-                                    sql,
-                                    (citem[1], citem[0], key_id, value_id, ucert_id),
+                                _ = session.execute(
+                                    INSERT_UIDCERTLIST_SQL ,
+                                    value=citem[1], datatype=citem[0], key_id=key_id, value_id=value_id, cert_id=ucert_id,
                                 )
                 else:
                     # If no value, then we can skip the rest
@@ -340,19 +348,14 @@ class AsyncKeyStore:
         # Now save the key
         async with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
-            sql = "UPDATE keys set keyvalue=? where fingerprint=?"
-            _ = await session.execute(sql, (newcert, key.fingerprint))
+            _ = await session.execute(UPDATE_PASSWORD_SQL, (newcert, key.fingerprint))
             # Now we need the key_id from the database table
-            fromdb = await session.fetch_one(
-                "SELECT id from keys where fingerprint=?", (key.fingerprint,)
-            )
-            _key_id = fromdb["id"]
+            # removed seems unused
             # Now let us add the subkey and keyid details
-            sql = "UPDATE subkeys set expiration=? where fingerprint=?"
             for subkey in newsubkeys:
                 etime_str = str(subkey[3].timestamp()) if subkey[3] else ""
                 _ = await session.execute(
-                    sql,
+                    UPDATE_SUBKEY_EXPIRATION_SQL ,
                     (etime_str, subkey[1]),
                 )
         # Regnerate the key object and return it
@@ -388,13 +391,12 @@ class AsyncKeyStore:
         # We only need get the subkeys and get the expiration time from them
         _, _, _, expirytime, _, _ = parse_cert_bytes(newcert)
 
-        sql = "UPDATE keys set expiration=? where fingerprint=?"
         if expirytime:
             etime_str = str(expirytime.timestamp())
         else:
             etime_str = None
         async with self.spec.provide_session(self.config) as session:
-            _ = await session.execute(sql, (etime_str, fingerprint))
+            _ = await session.execute(UPDATE_KEY_EXPIRATION_SQL , expiration=etime_str, fingerprint=fingerprint)
         return await self.get_key(fingerprint)
 
     async def add_userid(self, key: Key, userid: str, password: str) -> Key:
@@ -431,14 +433,9 @@ class AsyncKeyStore:
             _ = fobj.write(newcert)
         async with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
-            sql = "UPDATE keys set keyvalue=? where fingerprint=?"
-            _ = await session.execute(sql, (newcert, key.fingerprint))
+            _ = await session.execute(UPDATE_PASSWORD_SQL , keyvalue=newcert, fingerprint=key.fingerprint)
             # Now we need the key_id from the database table
-            key_id = await session.fetch_value(
-                "SELECT id from keys where fingerprint=?", (key.fingerprint,)
-            )
-            # fromdb = cursor.fetchone()
-            # key_id = fromdb[0]
+            key_id = await session.fetch_value(SELECT_KEYID_SQL , fingerprint=key.fingerprint)
             # Now loop through the new userids and find the new one
             for uid in uids:
                 if "value" in uid and uid["value"]:
@@ -448,8 +445,7 @@ class AsyncKeyStore:
                     # Ok, now we have a new user id, we can start adding this value to the database
                     # this next line does not make sense for a new user id :)
                     revoked = 1 if uid["revoked"] else 0
-                    sql = "INSERT INTO uidvalues (value, revoked, key_id) values (?, ?, ?) returning id"
-                    value_id = await session.fetch_value(sql, (uid["value"], revoked, key_id))
+                    value_id = await session.fetch_value(INSERT_UIDVALUES_SQL , value=uid["value"], revoked=revoked, key_id=key_id)
                 else:
                     # If no value, then we can skip the rest
                     continue
@@ -494,17 +490,14 @@ class AsyncKeyStore:
             _ = fobj.write(newcert)
         async with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
-            sql = "UPDATE keys set keyvalue=? where fingerprint=?"
-            _ = await session.execute(sql, (newcert, key.fingerprint))
-            sql = "SELECT id FROM uidvalues WHERE key_id=(SELECT id FROM keys where fingerprint=?) AND value=?"
+            _ = await session.execute(UPDATE_PASSWORD_SQL , keyvalue=newcert,fingerprint=key.fingerprint)
             # Now loop through the new userids and find the new one
-            value_id = await session.fetch_value(
-                sql, (key.fingerprint, userid)
-            )  # Now we will mark this userid as revoked
-
+            value_id =await  session.fetch_value(
+              SELECT_UIDVALUES_SQL   , fingerprint=key.fingerprint, value=userid
+            )
+            # Now we will mark this userid as revoked
             revoked = 1
-            sql = "UPDATE uidvalues set revoked=? where id=? returning *"
-            _revoked = await session.fetch(sql, (revoked, value_id))
+            _revoked = await session.fetch(UPDATE_REVOKED_SQL , revoked=revoked, key_id=value_id)
         # Regnerate the key object and return it
         return await self.get_key(fingerprint)
 
@@ -539,25 +532,12 @@ class AsyncKeyStore:
         )
         return await self.get_key(fingerprint)
 
+
     async def details(self):
         "Returns tuple of (number_of_public, number_of_secret_keys)"
-        public = 0
-        secret = 0
         async with self.spec.provide_session(self.config) as session:
-            rows = await session.fetch("SELECT id, fingerprint, keytype from keys")
-            for row in rows:
-                if row["keytype"] == 1:
-                    secret += 1
-                elif row["keytype"] == 0:
-                    public += 1
-                else:
-                    logger.warning(
-                        f"Unknown keytype {row['keytype']} for key {row['fingerprint']}"
-                    )
-                    raise CryptoError(
-                        f"Unknown keytype {row['keytype']} for key {row['fingerprint']}"
-                    )
-        return public, secret
+            row = session.fetch_one(SELECT_PUB_PRIV_COUNT_SQL )
+            return row["public"], row["secret"]
 
     async def get_key(self, fingerprint: str) -> Key:
         """Finds an existing public key based on the fingerprint. If the key can not be found on disk, then raises OSError.

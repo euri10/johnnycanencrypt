@@ -5,7 +5,6 @@ import shutil
 import pytest
 from sqlspec import SQLSpec
 from sqlspec.adapters.aiosqlite import AiosqliteConfig
-from sqlspec.adapters.asyncpg import AsyncpgConfig
 import vcr  # pyright: ignore[reportMissingTypeStubs]
 
 import johnnycanencrypt as jce
