@@ -92,9 +92,9 @@ class KeyStore:
             migration_config = {
                 "script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/sqlite/"
             }
-        elif config.driver_type.dialect == "postgresql":
+        elif config.driver_type.dialect == "postgres":
             migration_config = {
-                "script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/postgresql/"
+                "script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/postgres/"
             }
         else:
             raise ValueError(

@@ -1,10 +1,12 @@
 import datetime
 from pathlib import Path
 import shutil
+import uuid
 
 import pytest
 from sqlspec import SQLSpec
 from sqlspec.adapters.aiosqlite import AiosqliteConfig
+from sqlspec.adapters.asyncpg import AsyncpgConfig
 import vcr  # pyright: ignore[reportMissingTypeStubs]
 
 import johnnycanencrypt as jce
@@ -21,14 +23,14 @@ pytestmark = pytest.mark.anyio
 @pytest.fixture
 async def ks():
     spec = SQLSpec()
-    config = spec.add_config(
-        AiosqliteConfig(
-            connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
-        )
-    )
-    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
-    # pool_config={"min_size": 1, "max_size": 1},
-    # ))
+    # config = spec.add_config(
+    #     AiosqliteConfig(
+    #         connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
+    #     )
+    # )
+    config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
+    pool_config={"min_size": 1, "max_size": 1},
+    ))
     _ks = await jce.AsyncKeyStore.create(
         spec=spec, config=config, path=BASE_TESTSDIR / "files/store"
     )
@@ -39,10 +41,10 @@ async def ks():
 async def tmp_ks(tmp_path: Path):
     dbpath = tmp_path / "jce.db"
     spec = SQLSpec()
-    config = spec.add_config(AiosqliteConfig(connection_config={"database": dbpath}))
-    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
-    # pool_config={"min_size": 1, "max_size": 1},
-    # ))
+    # config = spec.add_config(AiosqliteConfig(connection_config={"database": dbpath}))
+    config = spec.add_config(AsyncpgConfig(connection_config={"dsn": f"postgres://postgres:postgres@localhost:5432/{uuid.uuid4().hex}"},
+    pool_config={"min_size": 1, "max_size": 1},
+    ))
     ks = await jce.AsyncKeyStore.create(spec=spec, config=config, path=tmp_path)
     return ks
 
@@ -50,14 +52,14 @@ async def tmp_ks(tmp_path: Path):
 @pytest.fixture
 async def tmp_ks_mixed(tmp_path: Path):
     spec = SQLSpec()
-    config = spec.add_config(
-        AiosqliteConfig(
-            connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
-        )
-    )
-    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
-    # pool_config={"min_size": 1, "max_size": 1},
-    # ))
+    # config = spec.add_config(
+        # AiosqliteConfig(
+            # connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
+        # )
+    # )
+    config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
+    pool_config={"min_size": 1, "max_size": 1},
+    ))
     ks = await jce.AsyncKeyStore.create(spec=spec, config=config, path=tmp_path)
     return ks
 
@@ -95,6 +97,8 @@ async def test_create_primary_key_with_encryption(tmp_ks: jce.AsyncKeyStore):
 
 
 async def test_key_cipher_details(ks: jce.AsyncKeyStore):
+    # TODO: find a better way to test this. in sqlite / aiosqlite the fixture ks
+    # uses a pre-populated db with known keys.
     saved = [
         ("F4F388BBB194925AE301F844C52B42177857DD79", "EdDSA", 256),
         ("102EBD23BD5D2D340FBBDE0ADFD1C55926648D2F", "EdDSA", 256),
