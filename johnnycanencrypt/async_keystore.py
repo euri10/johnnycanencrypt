@@ -86,9 +86,18 @@ class AsyncKeyStore:
         path: Path,
     ) -> None:
         self.spec = spec
-        migration_config = {
-            "script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/"
-        }
+        if config.driver_type.dialect == "sqlite":
+            migration_config = {
+                "script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/sqlite",
+            }
+        elif config.driver_type.dialect == "postgresql":
+            migration_config = {
+                "script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/postgresql",
+            }
+        else:
+            raise ValueError(
+                f"Unsupported database dialect: {config.driver_type.dialect}"
+            )
         config.migration_config = migration_config
         config._initialize_migration_components()
         self.config = config
@@ -113,12 +122,6 @@ class AsyncKeyStore:
             except Exception as e:
                 raise e
         return self
-
-    async def __aenter__(self) -> Self:
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        pass
 
     @override
     def __str__(self) -> str:

@@ -88,9 +88,18 @@ class KeyStore:
         path: Path,
     ) -> None:
         self.spec = spec
-        migration_config = {
-            "script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/"
-        }
+        if config.driver_type.dialect == "sqlite":
+            migration_config = {
+                "script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/sqlite/"
+            }
+        elif config.driver_type.dialect == "postgresql":
+            migration_config = {
+                "script_location": "/home/lotso/code/johnnycanencrypt/johnnycanencrypt/jce_migrations/postgresql/"
+            }
+        else:
+            raise ValueError(
+                f"Unsupported database dialect {config.driver_type.dialect} for migration."
+            )
         config.migration_config = migration_config
         config._initialize_migration_components()
         self.config = config
