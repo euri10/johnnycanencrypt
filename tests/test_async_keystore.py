@@ -26,7 +26,9 @@ async def ks():
             connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
         )
     )
-    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"}))
+    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
+    # pool_config={"min_size": 1, "max_size": 1},
+    # ))
     _ks = await jce.AsyncKeyStore.create(
         spec=spec, config=config, path=BASE_TESTSDIR / "files/store"
     )
@@ -38,7 +40,9 @@ async def tmp_ks(tmp_path: Path):
     dbpath = tmp_path / "jce.db"
     spec = SQLSpec()
     config = spec.add_config(AiosqliteConfig(connection_config={"database": dbpath}))
-    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"}))
+    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
+    # pool_config={"min_size": 1, "max_size": 1},
+    # ))
     ks = await jce.AsyncKeyStore.create(spec=spec, config=config, path=tmp_path)
     return ks
 
@@ -51,7 +55,9 @@ async def tmp_ks_mixed(tmp_path: Path):
             connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
         )
     )
-    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"}))
+    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
+    # pool_config={"min_size": 1, "max_size": 1},
+    # ))
     ks = await jce.AsyncKeyStore.create(spec=spec, config=config, path=tmp_path)
     return ks
 
@@ -347,7 +353,7 @@ async def test_ks_encrypt_decrypt_filehandler(
 
     public_key = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(inputfile, "rb") as fobj:
-        assert tmp_ks_mixed.encrypt_file(public_key, fobj, str(output))
+        assert await tmp_ks_mixed.encrypt_file(public_key, fobj, str(output))
     secret_key = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(output, "rb") as fobj:
         _ = tmp_ks_mixed.decrypt_file(
@@ -406,7 +412,7 @@ async def test_ks_sign_verify_file_detached(
         key, str(file_to_be_signed), "redhat", write=True
     )
     assert signed.startswith("-----BEGIN PGP SIGNATURE-----\n")
-    assert tmp_ks_mixed.verify_file_detached(
+    assert await tmp_ks_mixed.verify_file_detached(
         key, str(file_to_be_signed), str(file_to_be_signed) + ".asc"
     )
 

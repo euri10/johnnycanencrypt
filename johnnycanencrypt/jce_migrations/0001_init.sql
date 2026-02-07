@@ -7,7 +7,7 @@
 -- name: migrate-0001-up
 -- dialect: sqlite
 CREATE TABLE keys (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	id INTEGER PRIMARY KEY,
 	keyvalue BLOB NOT NULL,
 	fingerprint TEXT NOT NULL,
 	keyid TEXT NOT NULL,
@@ -18,19 +18,6 @@ CREATE TABLE keys (
     oncard TEXT,
     primary_on_card TEXT
 );
--- CREATE TABLE keys (
---     id SERIAL PRIMARY KEY,
---     keyvalue BYTEA NOT NULL,
---     fingerprint TEXT NOT NULL,
---     keyid TEXT NOT NULL,
---     expiration TIMESTAMP,
---     creation TIMESTAMP,
---     keytype INTEGER,
---     can_primary_sign BOOLEAN,
---     oncard TEXT,
---     primary_on_card TEXT
--- );
-
 CREATE TABLE subkeys (
     id INTEGER PRIMARY KEY,
     key_id INTEGER,

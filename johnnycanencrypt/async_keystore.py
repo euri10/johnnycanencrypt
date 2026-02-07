@@ -22,12 +22,20 @@ from johnnycanencrypt.utils import (
     INSERT_UIDCERTS_SQL,
     INSERT_UIDVALUES_SQL,
     SELECT_ALL_KEYS,
+    SELECT_ALLSUBKEYS_BY_KEY_ID,
     SELECT_KEY_BY_FINGERPRINT_SQL,
     SELECT_KEY_BY_ID_SQL,
     SELECT_KEY_BY_KEYID_SQL,
     SELECT_KEYID_SQL,
     SELECT_PUB_PRIV_COUNT_SQL,
     SELECT_SUBKEY_BY_KEYID,
+    SELECT_UIDCERT_BY_KEYID,
+    SELECT_UIDCERTLIST_BY_CERTID,
+    SELECT_UIDEMAILS_BY_VALUE,
+    SELECT_UIDNAMES_BY_VALUE,
+    SELECT_UIDURIS_BY_VALUE,
+    SELECT_UIDVALUES_BY_KEYID,
+    SELECT_UIDVALUES_BY_VALUE,
     SELECT_UIDVALUES_SQL,
     UPDATE_KEY_EXPIRATION_SQL,
     UPDATE_KEY_SQL,
@@ -105,6 +113,12 @@ class AsyncKeyStore:
             except Exception as e:
                 raise e
         return self
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
 
     @override
     def __str__(self) -> str:
@@ -200,6 +214,7 @@ class AsyncKeyStore:
         await self._save_key_info_to_db(
             cert, uids, fingerprint, keytype, expirationtime, creationtime, subkeys
         )
+        print(f"Key with fingerprint {fingerprint} added to the keystore.")
 
     async def _save_key_info_to_db(
         self,
@@ -212,8 +227,8 @@ class AsyncKeyStore:
         othervalues: dict[str, Any],  # pyright: ignore[reportExplicitAny]
     ):
         "Saves all information given to the SQLite3 database"
-        etime = str(expirationtime.timestamp()) if expirationtime else ""
-        ctime = str(creationtime.timestamp()) if creationtime else ""
+        etime = str(expirationtime.timestamp()) if expirationtime else None
+        ctime = str(creationtime.timestamp()) if creationtime else None
         ktype = 1 if keytype else 0
         subkeys = othervalues["subkeys"]
         mainkeyid = othervalues["keyid"]
@@ -231,14 +246,19 @@ class AsyncKeyStore:
                     key = await self.get_key(fingerprint)
                     newcert = merge_keys(key.keyvalue, cert, False)
                     uids, _fp, _kt, et, ct, othervalues = parse_cert_bytes(newcert)
-                    etime = str(et.timestamp()) if et else ""
-                    ctime = str(ct.timestamp()) if ct else ""
+                    etime = str(et.timestamp()) if et else None
+                    ctime = str(ct.timestamp()) if ct else None
                 else:  # Means another secret to replace
                     # We will not do anything, if you want reimport for a secret key
                     # delete the old one, and import the new one
                     raise SameKeyError(f"{fingerprint}")
-                _ = await session.execute(
-                    UPDATE_KEY_SQL, cert, ktype, etime, ctime, key_id
+                _updated = await session.execute(
+                    UPDATE_KEY_SQL,
+                    keyvalue=cert,
+                    keytype=ktype,
+                    expiration=etime,
+                    creation=ctime,
+                    id=key_id,
                 )
             else:
                 # Now insert the new key and get the key_id with returning, if supported
@@ -260,18 +280,22 @@ class AsyncKeyStore:
                     raise e
             # Now let us add the subkey and keyid details
             for subkey in subkeys:
-                ctime = str(subkey[2].timestamp()) if subkey[2] else ""
-                etime = str(subkey[3].timestamp()) if subkey[3] else ""
-                _ = await session.execute(
-                    INSERT_SUBKEYS_SQL,
-                    key_id=key_id,
-                    fingerprint=subkey[1],
-                    keyid=subkey[0],
-                    expiration=etime,
-                    creation=ctime,
-                    keytype=subkey[4],
-                    revoked=subkey[5],
-                )
+                ctime = str(subkey[2].timestamp()) if subkey[2] else None
+                etime = str(subkey[3].timestamp()) if subkey[3] else None
+                try:
+                    _ = await session.execute(
+                        INSERT_SUBKEYS_SQL,
+                        key_id=key_id,
+                        fingerprint=subkey[1],
+                        keyid=subkey[0],
+                        expiration=etime,
+                        creation=ctime,
+                        keytype=subkey[4],
+                        revoked=subkey[5],
+                    )
+                except SQLSpecError as e:
+                    logger.error(f"Error inserting subkey: {e}")
+                    raise e
 
             # TODO: Now for each of the uid, add to the right dictionary
             for uid_keyname in ["name", "value", "email", "uri"]:
@@ -381,7 +405,9 @@ class AsyncKeyStore:
         # Now save the key
         async with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
-            _ = await session.execute(UPDATE_PASSWORD_SQL, (newcert, key.fingerprint))
+            _ = await session.execute(
+                UPDATE_PASSWORD_SQL, keyvalue=newcert, fingerprint=key.fingerprint
+            )
             # Now we need the key_id from the database table
             # removed seems unused
             # Now let us add the subkey and keyid details
@@ -389,7 +415,8 @@ class AsyncKeyStore:
                 etime_str = str(subkey[3].timestamp()) if subkey[3] else ""
                 _ = await session.execute(
                     UPDATE_SUBKEY_EXPIRATION_SQL,
-                    (etime_str, subkey[1]),
+                    expiration=etime_str,
+                    fingerprint=subkey[1],
                 )
         # Regnerate the key object and return it
         return await self.get_key(fingerprint)
@@ -585,7 +612,7 @@ class AsyncKeyStore:
     async def details(self):
         "Returns tuple of (number_of_public, number_of_secret_keys)"
         async with self.spec.provide_session(self.config) as session:
-            row = session.fetch_one(SELECT_PUB_PRIV_COUNT_SQL)
+            row = await session.fetch_one(SELECT_PUB_PRIV_COUNT_SQL)
             return row["public"], row["secret"]
 
     async def get_key(self, fingerprint: str) -> Key:
@@ -639,7 +666,6 @@ class AsyncKeyStore:
         if not keys:
             raise KeyNotFoundError("The key(s) not found in the keystore.")
         finalresult = []
-        sql_for_certs = "SELECT value, datatype FROM uidcertlist WHERE cert_id=?"
         for result in keys:
             if result:
                 key_id = result["id"]
@@ -663,8 +689,9 @@ class AsyncKeyStore:
 
                 # Now get the uids
                 async with self.spec.provide_session(self.config) as session:
-                    sql = "SELECT id, value, revoked FROM uidvalues WHERE key_id=?"
-                    uidvalues = await session.fetch(sql, key_id, schema_type=UIDValues)
+                    uidvalues = await session.fetch(
+                        SELECT_UIDVALUES_BY_KEYID, key_id=key_id, schema_type=UIDValues
+                    )
                     uids = []
                     for row in uidvalues:
                         value_id = row.id
@@ -684,8 +711,9 @@ class AsyncKeyStore:
                         uri = await _get_one_row_from_table("uiduris", value_id)
                         # Now time to find any certification for the uid value
                         # TODO: Write a join query in future please
-                        csql = "SELECT id, ctype, creation FROM uidcerts WHERE key_id=? and value_id=?"
-                        certrows = await session.fetch(csql, key_id, value_id)
+                        certrows = await session.fetch(
+                            SELECT_UIDCERT_BY_KEYID, key_id=key_id, value_id=value_id
+                        )
                         # let us loop over all the certs
                         certifications = []
                         for uidcert in certrows:
@@ -694,7 +722,7 @@ class AsyncKeyStore:
                             cert_result["certification_type"] = uidcert["ctype"]
                             ucertid = uidcert["id"]
                             cert_issuers = await session.execute(
-                                sql_for_certs, (ucertid,)
+                                SELECT_UIDCERTLIST_BY_CERTID, cert_id=ucertid
                             )
                             issuers = []
                             for cissuer in cert_issuers:
@@ -715,43 +743,44 @@ class AsyncKeyStore:
                             }
                         )
 
-                # Get the subkeys
-                sql = "SELECT fingerprint, keyid, expiration, creation, keytype, revoked FROM subkeys WHERE key_id=?"
-                rows = await session.fetch(sql, (key_id,))
-                othervalues = {}
-                subs = {}
-                sort_subkeys = []
-                # Each subkey is added as a tuple
-                # Remember that there can be many expired subkeys.
-                # TODO: Add a value to mark if it was alive at the time of the call
-                for row in rows:
-                    etime = (
-                        datetime.fromtimestamp(float(row["expiration"]))
-                        if row["expiration"]
-                        else None
+                    # Get the subkeys
+                    rows = await session.fetch(
+                        SELECT_ALLSUBKEYS_BY_KEY_ID, key_id=key_id
                     )
-                    ctime = (
-                        datetime.fromtimestamp(float(row["creation"]))
-                        if row["creation"]
-                        else None
-                    )
-                    subs[row["keyid"]] = (
-                        row["fingerprint"],
-                        etime,
-                        ctime,
-                        row["keytype"],
-                        bool(row["revoked"]),
-                    )
-                    sort_subkeys.append(
-                        {
-                            "keyid": row["keyid"],
-                            "fingerprint": row["fingerprint"],
-                            "expiration": etime,
-                            "creation": ctime,
-                            "keytype": row["keytype"],
-                            "revoked": bool(row["revoked"]),
-                        }
-                    )
+                    othervalues = {}
+                    subs = {}
+                    sort_subkeys = []
+                    # Each subkey is added as a tuple
+                    # Remember that there can be many expired subkeys.
+                    # TODO: Add a value to mark if it was alive at the time of the call
+                    for row in rows:
+                        etime = (
+                            datetime.fromtimestamp(float(row["expiration"]))
+                            if row["expiration"]
+                            else None
+                        )
+                        ctime = (
+                            datetime.fromtimestamp(float(row["creation"]))
+                            if row["creation"]
+                            else None
+                        )
+                        subs[row["keyid"]] = (
+                            row["fingerprint"],
+                            etime,
+                            ctime,
+                            row["keytype"],
+                            bool(row["revoked"]),
+                        )
+                        sort_subkeys.append(
+                            {
+                                "keyid": row["keyid"],
+                                "fingerprint": row["fingerprint"],
+                                "expiration": etime,
+                                "creation": ctime,
+                                "keytype": row["keytype"],
+                                "revoked": bool(row["revoked"]),
+                            }
+                        )
 
                 sort_subkeys.sort(key=lambda x: to_sort_by_expiry(x), reverse=True)
                 othervalues["subkeys"] = subs
@@ -798,8 +827,7 @@ class AsyncKeyStore:
         # TODO: Now let us search
         async with self.spec.provide_session(self.config) as session:
             if qtype == "value":
-                sql = "SELECT id, key_id FROM uidvalues where value=?"
-                rows = await session.fetch(sql, (qvalue,))
+                rows = await session.fetch(SELECT_UIDVALUES_BY_VALUE, value=qvalue)
                 for row in rows:
                     key_id = row["key_id"]
                     r = await self._internal_get_key(key_id=key_id)
@@ -808,8 +836,7 @@ class AsyncKeyStore:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
             elif qtype == "email":
-                sql = "SELECT id, key_id FROM uidemails where value=?"
-                rows = await session.fetch(sql, (qvalue,))
+                rows = await session.fetch(SELECT_UIDEMAILS_BY_VALUE, value=qvalue)
                 for row in rows:
                     key_id = row["key_id"]
                     r = await self._internal_get_key(key_id=key_id)
@@ -818,8 +845,7 @@ class AsyncKeyStore:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
             elif qtype == "name":
-                sql = "SELECT id, key_id FROM uidenames where value=?"
-                rows = await session.fetch(sql, (qvalue,))
+                rows = await session.fetch(SELECT_UIDNAMES_BY_VALUE, value=qvalue)
                 for row in rows:
                     key_id = row["key_id"]
                     r = await self._internal_get_key(key_id=key_id)
@@ -828,8 +854,7 @@ class AsyncKeyStore:
                         unique_fingerprints[key.fingerprint] = True
                         results.append(key)
             elif qtype == "uri":
-                sql = "SELECT id, key_id FROM uiduris where value=?"
-                rows = await session.fetch(sql, (qvalue,))
+                rows = await session.fetch(SELECT_UIDURIS_BY_VALUE, value=qvalue)
                 for row in rows:
                     key_id = row["key_id"]
                     r = await self._internal_get_key(key_id=key_id)
@@ -917,8 +942,9 @@ class AsyncKeyStore:
                 "The key for the given fingerprint={fingerprint} is not found in the keystore"
             )
         async with self.spec.provide_session(self.config) as session:
-            sql = "SELECT id from keys where fingerprint=?"
-            result = await session.fetch_one_or_none(sql, (fingerprint,))
+            result = await session.fetch_one_or_none(
+                SELECT_KEYID_SQL, fingerprint=fingerprint
+            )
             if result:
                 keyid = result["id"]
                 _ = await session.execute(

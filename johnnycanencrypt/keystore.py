@@ -731,42 +731,42 @@ class KeyStore:
                             }
                         )
 
-                # Get the subkeys
-                rows = session.fetch(SELECT_ALLSUBKEYS_BY_KEY_ID, key_id=key_id)
-                othervalues = {}
-                subs = {}
-                sort_subkeys = []
-                # Each subkey is added as a tuple
-                # Remember that there can be many expired subkeys.
-                # TODO: Add a value to mark if it was alive at the time of the call
-                for row in rows:
-                    etime = (
-                        datetime.fromtimestamp(float(row["expiration"]))
-                        if row["expiration"]
-                        else None
-                    )
-                    ctime = (
-                        datetime.fromtimestamp(float(row["creation"]))
-                        if row["creation"]
-                        else None
-                    )
-                    subs[row["keyid"]] = (
-                        row["fingerprint"],
-                        etime,
-                        ctime,
-                        row["keytype"],
-                        bool(row["revoked"]),
-                    )
-                    sort_subkeys.append(
-                        {
-                            "keyid": row["keyid"],
-                            "fingerprint": row["fingerprint"],
-                            "expiration": etime,
-                            "creation": ctime,
-                            "keytype": row["keytype"],
-                            "revoked": bool(row["revoked"]),
-                        }
-                    )
+                    # Get the subkeys
+                    rows = session.fetch(SELECT_ALLSUBKEYS_BY_KEY_ID, key_id=key_id)
+                    othervalues = {}
+                    subs = {}
+                    sort_subkeys = []
+                    # Each subkey is added as a tuple
+                    # Remember that there can be many expired subkeys.
+                    # TODO: Add a value to mark if it was alive at the time of the call
+                    for row in rows:
+                        etime = (
+                            datetime.fromtimestamp(float(row["expiration"]))
+                            if row["expiration"]
+                            else None
+                        )
+                        ctime = (
+                            datetime.fromtimestamp(float(row["creation"]))
+                            if row["creation"]
+                            else None
+                        )
+                        subs[row["keyid"]] = (
+                            row["fingerprint"],
+                            etime,
+                            ctime,
+                            row["keytype"],
+                            bool(row["revoked"]),
+                        )
+                        sort_subkeys.append(
+                            {
+                                "keyid": row["keyid"],
+                                "fingerprint": row["fingerprint"],
+                                "expiration": etime,
+                                "creation": ctime,
+                                "keytype": row["keytype"],
+                                "revoked": bool(row["revoked"]),
+                            }
+                        )
 
                 sort_subkeys.sort(key=lambda x: to_sort_by_expiry(x), reverse=True)
                 othervalues["subkeys"] = subs
