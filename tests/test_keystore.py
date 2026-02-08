@@ -8,6 +8,7 @@ import vcr  # pyright: ignore[reportMissingTypeStubs]
 from sqlspec import SQLSpec
 from sqlspec.adapters.sqlite import SqliteConfig
 import johnnycanencrypt as jce
+from johnnycanencrypt.keystore_protocol import KeyStoreProtocol
 import johnnycanencrypt.johnnycanencrypt as rjce
 from johnnycanencrypt.key import SignatureType
 from tests.conftest import BASE_TESTSDIR
@@ -24,7 +25,7 @@ def ks():
             connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
         )
     )
-    _ks = jce.KeyStore.create(
+    _ks: KeyStoreProtocol = jce.KeyStore.create(
         spec=spec, config=config, path=BASE_TESTSDIR / "files/store"
     )
     return _ks

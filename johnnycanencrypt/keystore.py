@@ -607,7 +607,7 @@ class KeyStore:
         )
         return self.get_key(fingerprint)
 
-    def details(self):
+    def details(self) -> tuple[int, int]:
         "Returns tuple of (number_of_public, number_of_secret_keys)"
         with self.spec.provide_session(self.config) as session:
             row = session.fetch_one(SELECT_PUB_PRIV_COUNT_SQL)
@@ -636,7 +636,7 @@ class KeyStore:
                 keys = session.fetch(SELECT_ALL_KEYS)
             return self._internal_build_key_list(keys)
 
-    def get_keys_by_keyid(self, keyid: str):
+    def get_keys_by_keyid(self, keyid: str) -> list[Key]:
         "Returns a list of keys for a given KeyID"
         # TODO: This has bad SQL, we can improve in future.
         list_of_db_ids = set()
@@ -658,7 +658,7 @@ class KeyStore:
                 KeyNotFoundError(f"The key with keyid {keyid} is not found.")
             return result
 
-    def _internal_build_key_list(self, keys: SQLResult | None):
+    def _internal_build_key_list(self, keys: SQLResult | None) -> list[Key]:
         "Internal method to create a list of keys from db result rows"
         if not keys:
             raise KeyNotFoundError("The key(s) not found in the keystore.")
@@ -1036,7 +1036,7 @@ class KeyStore:
         inputfilepath: StrOrBytesPath | BinaryIO,
         outputfilepath: str | bytes,
         armor: bool = True,
-    ):
+    ) -> bool:
         """Encrypts the given data with the list of keys and writes in the output file.
 
         :param keys: List of fingerprints or Key objects
@@ -1281,7 +1281,7 @@ class KeyStore:
 
     def verify_file_detached(
         self, key: str | Key, filepath: str | bytes, signature_path: StrOrBytesPath
-    ):
+    ) -> bool:
         """Verifies the given filepath based on the signature file.
 
         :param key: Fingerprint or public Key object
@@ -1386,7 +1386,7 @@ class KeyStore:
 
         return jp.verify_and_extract_file(input_filepath, outputpath)
 
-    def fetch_key_by_fingerprint(self, fingerprint: str):
+    def fetch_key_by_fingerprint(self, fingerprint: str) -> Key:
         """Fetches key from keys.openpgp.org based on the fingerprint.
 
         :param fingerprint: The fingerprint string without the leading 0x and in upper case.
@@ -1401,7 +1401,7 @@ class KeyStore:
         url = f"https://keys.openpgp.org/vks/v1/by-fingerprint/{fingerprint}"
         return self._internal_fetch_from_server(url, fingerprint)
 
-    def fetch_key_by_email(self, email: str):
+    def fetch_key_by_email(self, email: str) -> Key:
         """Fetches key from keys.openpgp.org based on the fingerprint.
 
         :param email: The email address to search
