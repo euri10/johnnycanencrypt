@@ -142,11 +142,11 @@ def test_keystore_contains_key(tmp_ks: jce.KeyStore):
     )
 
     # First only the fingerprint
-    assert fingerprint in tmp_ks
+    assert tmp_ks.contains(fingerprint)
     # Next the Key object
-    assert k in tmp_ks
+    assert tmp_ks.contains(k)
     # This should be false
-    assert "1111111" not in tmp_ks
+    assert not tmp_ks.contains("11111")
 
 
 def test_keystore_details(ks: jce.KeyStore):

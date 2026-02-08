@@ -354,7 +354,7 @@ class KeyStore:
                             sql, value=value, key_id=key_id, value_id=value_id
                         )
 
-    def __contains__(self, other: str | Key) -> bool:
+    def contains(self, other: str | Key) -> bool:
         """Checks if a Key object of fingerprint str exists in the keystore or not.
 
         :param other: Either fingerprint as str or `Key` object.
@@ -928,7 +928,7 @@ class KeyStore:
         else:
             raise TypeError(f"Wrong datatype for {str(key)}")
 
-        if fingerprint not in self:
+        if not self.contains(fingerprint):
             raise KeyNotFoundError(
                 "The key for the given fingerprint={fingerprint} is not found in the keystore"
             )

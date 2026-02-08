@@ -286,7 +286,7 @@ class AsyncKeyStore:
                 ctime = str(subkey[2].timestamp()) if subkey[2] else None
                 etime = str(subkey[3].timestamp()) if subkey[3] else None
                 try:
-                    _ = await session.execute(
+                    _inserted = await session.execute(
                         INSERT_SUBKEYS_SQL,
                         key_id=key_id,
                         fingerprint=subkey[1],
@@ -304,7 +304,7 @@ class AsyncKeyStore:
             for uid_keyname in ["name", "value", "email", "uri"]:
                 tablename = f"uid{uid_keyname}s"
                 # First delete all old ones
-                _ = await session.execute(
+                _deleted = await session.execute(
                     f"DELETE from {tablename} where key_id=:key_id", key_id=key_id
                 )
             for uid in uids:
@@ -337,7 +337,7 @@ class AsyncKeyStore:
                             # Now time to loop over the details and add them
                             for citem in ucert["certification_list"]:
                                 # citem is like [('fingerprint', 'F7FC698FAAE2D2EFBECDE98ED1B3ADC0E0238CA6'), ('keyid', 'D1B3ADC0E0238CA6')]
-                                _ = await session.execute(
+                                _inserted_cert = await session.execute(
                                     INSERT_UIDCERTLIST_SQL,
                                     value=citem[1],
                                     datatype=citem[0],
@@ -356,8 +356,9 @@ class AsyncKeyStore:
                         _ = await session.execute(
                             sql, value=value, key_id=key_id, value_id=value_id
                         )
+            await session.commit()
 
-    async def __contains__(self, other: str | Key) -> bool:
+    async def contains(self, other: str | Key) -> bool:
         """Checks if a Key object of fingerprint str exists in the keystore or not.
 
         :param other: Either fingerprint as str or `Key` object.
@@ -421,6 +422,7 @@ class AsyncKeyStore:
                     expiration=etime_str,
                     fingerprint=subkey[1],
                 )
+            await session.commit()
         # Regnerate the key object and return it
         return await self.get_key(fingerprint)
 
@@ -462,6 +464,7 @@ class AsyncKeyStore:
             _ = await session.execute(
                 UPDATE_KEY_EXPIRATION_SQL, expiration=etime_str, fingerprint=fingerprint
             )
+            await session.commit()
         return await self.get_key(fingerprint)
 
     async def add_userid(self, key: Key, userid: str, password: str) -> Key:
@@ -531,6 +534,7 @@ class AsyncKeyStore:
                         _ = await session.execute(
                             sql, value=value, key_id=key_id, value_id=value_id
                         )
+            await session.commit()
         # Regnerate the key object and return it
         return await self.get_key(fingerprint)
 
@@ -578,6 +582,7 @@ class AsyncKeyStore:
             _revoked = await session.fetch(
                 UPDATE_REVOKED_SQL, revoked=revoked, key_id=value_id
             )
+            await session.commit()
         # Regnerate the key object and return it
         return await self.get_key(fingerprint)
 
@@ -940,7 +945,7 @@ class AsyncKeyStore:
         else:
             raise TypeError(f"Wrong datatype for {str(key)}")
 
-        if fingerprint not in self:
+        if not await self.contains(fingerprint):
             raise KeyNotFoundError(
                 "The key for the given fingerprint={fingerprint} is not found in the keystore"
             )
@@ -974,6 +979,7 @@ class AsyncKeyStore:
                 _ = await session.execute(
                     "DELETE FROM uiduris where key_id=?", (keyid,)
                 )
+            await session.commit()
 
     async def _find_keys(self, keys: Sequence[Key | str]):
         "To find all the key paths"
@@ -1433,6 +1439,7 @@ class AsyncKeyStore:
         return await self._internal_fetch_from_server(url, email)
 
     async def _internal_fetch_from_server(self, url: str, term: str) -> Key:
+        # TODO: make this http call async
         resp = httpx.get(url)
         if resp.status_code == 404:
             raise KeyNotFoundError(
