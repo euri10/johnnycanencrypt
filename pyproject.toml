@@ -24,7 +24,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "httpx",
-    "sqlspec[aiosqlite,asyncpg]>=0.38.4",
+    "sqlspec[aiosqlite,asyncpg]>=0.39.0",
     "tzdata",
 ]
 
@@ -34,6 +34,9 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+sqlspec = { git = "https://github.com/litestar-org/sqlspec.git", rev = "65b5cc54de8d60271269e1ad6eb1542b742e4ef0" }
 
 [tool.scriv]
 version = "literal: pyproject.toml: project.version"

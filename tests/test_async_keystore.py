@@ -1,12 +1,10 @@
 import datetime
 from pathlib import Path
 import shutil
-import uuid
 
 import pytest
 from sqlspec import SQLSpec
 from sqlspec.adapters.aiosqlite import AiosqliteConfig
-from sqlspec.adapters.asyncpg import AsyncpgConfig
 import vcr  # pyright: ignore[reportMissingTypeStubs]
 
 import johnnycanencrypt as jce
@@ -23,14 +21,14 @@ pytestmark = pytest.mark.anyio
 @pytest.fixture
 async def ks():
     spec = SQLSpec()
-    # config = spec.add_config(
-    #     AiosqliteConfig(
-    #         connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
-    #     )
-    # )
-    config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
-    pool_config={"min_size": 1, "max_size": 1},
-    ))
+    config = spec.add_config(
+        AiosqliteConfig(
+            connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
+        )
+    )
+    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
+    # pool_config={"min_size": 1, "max_size": 1},
+    # ))
     _ks = await jce.AsyncKeyStore.create(
         spec=spec, config=config, path=BASE_TESTSDIR / "files/store"
     )
@@ -41,10 +39,10 @@ async def ks():
 async def tmp_ks(tmp_path: Path):
     dbpath = tmp_path / "jce.db"
     spec = SQLSpec()
-    # config = spec.add_config(AiosqliteConfig(connection_config={"database": dbpath}))
-    config = spec.add_config(AsyncpgConfig(connection_config={"dsn": f"postgres://postgres:postgres@localhost:5432/{uuid.uuid4().hex}"},
-    pool_config={"min_size": 1, "max_size": 1},
-    ))
+    config = spec.add_config(AiosqliteConfig(connection_config={"database": dbpath}))
+    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": f"postgres://postgres:postgres@localhost:5432/{uuid.uuid4().hex}"},
+    # pool_config={"min_size": 1, "max_size": 1},
+    # ))
     ks = await jce.AsyncKeyStore.create(spec=spec, config=config, path=tmp_path)
     return ks
 
@@ -52,14 +50,14 @@ async def tmp_ks(tmp_path: Path):
 @pytest.fixture
 async def tmp_ks_mixed(tmp_path: Path):
     spec = SQLSpec()
-    # config = spec.add_config(
-        # AiosqliteConfig(
-            # connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
-        # )
-    # )
-    config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
-    pool_config={"min_size": 1, "max_size": 1},
-    ))
+    config = spec.add_config(
+        AiosqliteConfig(
+            connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
+        )
+    )
+    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
+    # pool_config={"min_size": 1, "max_size": 1},
+    # ))
     ks = await jce.AsyncKeyStore.create(spec=spec, config=config, path=tmp_path)
     return ks
 
@@ -341,7 +339,7 @@ async def test_ks_encrypt_decrypt_file(tmp_ks_mixed: jce.AsyncKeyStore, tmp_path
     public_key = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     assert await tmp_ks_mixed.encrypt_file(public_key, str(inputfile), str(output))
     secret_key = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    _ = tmp_ks_mixed.decrypt_file(
+    _ = await tmp_ks_mixed.decrypt_file(
         secret_key, str(output), str(decrypted_output), password="redhat"
     )
     verify_files(inputfile, decrypted_output)
@@ -360,7 +358,7 @@ async def test_ks_encrypt_decrypt_filehandler(
         assert await tmp_ks_mixed.encrypt_file(public_key, fobj, str(output))
     secret_key = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
     with open(output, "rb") as fobj:
-        _ = tmp_ks_mixed.decrypt_file(
+        _ = await tmp_ks_mixed.decrypt_file(
             secret_key, fobj, str(decrypted_output), password="redhat"
         )
     verify_files(inputfile, decrypted_output)
@@ -380,12 +378,12 @@ async def test_ks_encrypt_decrypt_file_multiple_recipients(
         [key1, key2], str(inputfile), str(output)
     )
     secret_key1 = await tmp_ks_mixed.get_key("F51C310E02DC1B7771E176D8A1C5C364EB5B9A20")
-    _ = tmp_ks_mixed.decrypt_file(
+    _ = await tmp_ks_mixed.decrypt_file(
         secret_key1, str(output), str(decrypted_output), password="redhat"
     )
     verify_files(inputfile, decrypted_output)
     secret_key2 = await tmp_ks_mixed.get_key("F4F388BBB194925AE301F844C52B42177857DD79")
-    _ = tmp_ks_mixed.decrypt_file(
+    _ = await tmp_ks_mixed.decrypt_file(
         secret_key2, str(output), str(decrypted_output), password="redhat"
     )
     verify_files(inputfile, decrypted_output)

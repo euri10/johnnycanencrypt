@@ -478,7 +478,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx" },
-    { name = "sqlspec", extras = ["aiosqlite", "asyncpg"], specifier = ">=0.38.4" },
+    { name = "sqlspec", extras = ["aiosqlite", "asyncpg"], git = "https://github.com/litestar-org/sqlspec.git?rev=65b5cc54de8d60271269e1ad6eb1542b742e4ef0" },
     { name = "tzdata" },
 ]
 
@@ -1174,28 +1174,14 @@ wheels = [
 
 [[package]]
 name = "sqlspec"
-version = "0.38.4"
-source = { registry = "https://pypi.org/simple" }
+version = "0.39.0"
+source = { git = "https://github.com/litestar-org/sqlspec.git?rev=65b5cc54de8d60271269e1ad6eb1542b742e4ef0#65b5cc54de8d60271269e1ad6eb1542b742e4ef0" }
 dependencies = [
     { name = "mypy-extensions" },
     { name = "rich-click" },
     { name = "sqlglot" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ab/39/dcb4660b0b38ec3bca728339c7736494448e06c1aa923f1eb1b5d37686ab/sqlspec-0.38.4.tar.gz", hash = "sha256:951964a5308d7798e4deda49ffc376fe01b99ff21c5f0839aa5ddf21828d78ce", size = 1889459, upload-time = "2026-01-27T18:14:12.61Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b6/08/30e271d267922c4ef077997a947c00b7803ede35920723460833cb1dbf61/sqlspec-0.38.4-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:15d5b6de0582ebdcf284602b36e93050acc5ce493abd7f1d401155d91da63cbe", size = 4066475, upload-time = "2026-01-27T18:13:51.38Z" },
-    { url = "https://files.pythonhosted.org/packages/6e/7c/32445ad6941999a7d55df58f0a7bd56a6d17c148f55414c4783a6f9a6585/sqlspec-0.38.4-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:17fc33a52bdc3ecfa78362ee9191bc9d2caa2ea50c358bcb40e66c79970b8bdb", size = 4198479, upload-time = "2026-01-27T18:13:53.666Z" },
-    { url = "https://files.pythonhosted.org/packages/b1/7e/be2e9d5ed925c165084fbce709df5427f76137527501174fea39719b3f0c/sqlspec-0.38.4-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:8e3e0b18d44be1154fc88b045bdba97ac18f0d2ffb6868123299cb51b9dcc0af", size = 4032667, upload-time = "2026-01-27T18:13:55.766Z" },
-    { url = "https://files.pythonhosted.org/packages/08/78/15ee0bd2e26747ed08f31c7bbd0e3e440cb197364205a45ee1ae0444c68d/sqlspec-0.38.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:95015998f25139247abda5c91f3269e5ac8ba9b1fd600352da05a6a8ffed1ebf", size = 4152036, upload-time = "2026-01-27T18:13:57.369Z" },
-    { url = "https://files.pythonhosted.org/packages/94/ac/219ec07406a5c9b837cf11333cb5b0132b716b226ca2d22e5816b8aebb02/sqlspec-0.38.4-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ce93276edccb4d60114594e705cc14233b27eb598e97d5a60271f10d5f69c3f1", size = 4044824, upload-time = "2026-01-27T18:13:59.326Z" },
-    { url = "https://files.pythonhosted.org/packages/1c/f9/b2d9d35f0babc9cd63f5ad580900031a5ea7e54584ef9b487811a19c2008/sqlspec-0.38.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f62e0a7bfdc21b0cd1bf199a0093e6498e1f8e0b41822be485c96b23ae4761f9", size = 4213705, upload-time = "2026-01-27T18:14:01.344Z" },
-    { url = "https://files.pythonhosted.org/packages/42/42/3c382790f9201d95a234d232897edf44670bb9a24906aa67ec503bdb96b3/sqlspec-0.38.4-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ba65e7f75bac56beae9763f57251e04d453d67830be5a4747775d94b3c87c5da", size = 4037477, upload-time = "2026-01-27T18:14:03.248Z" },
-    { url = "https://files.pythonhosted.org/packages/de/74/1fe42b216237c1ee6d392edae27624d054dea384c050ddb5021cdc96db04/sqlspec-0.38.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7eb37aadb6e2af62af3fd6e01181a00b008530b9ed4a1f5298f8eb28e674acb9", size = 4208347, upload-time = "2026-01-27T18:14:05.492Z" },
-    { url = "https://files.pythonhosted.org/packages/f9/25/1ecee1f777130cca2e9a151ec776a21ed37dc3490599be9a6bfc8ee7f414/sqlspec-0.38.4-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f774982ee19e9a7e324366a64dd666ec731367d3b1d0eaf0bed4a38de2aeaa78", size = 4070981, upload-time = "2026-01-27T18:14:07.909Z" },
-    { url = "https://files.pythonhosted.org/packages/df/c1/6237387dead062efac26d93428a0e200aea2f96651113c25f488c3503c26/sqlspec-0.38.4-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7136d3b5b1ad18622b693f35fbbe40e20ade480d2d90b8c181c40b7dfffcf064", size = 4212204, upload-time = "2026-01-27T18:14:09.904Z" },
-    { url = "https://files.pythonhosted.org/packages/c6/bc/e276f06800188ddf896415dd8be592b0a82f1f69e44917893a80968635bc/sqlspec-0.38.4-py3-none-any.whl", hash = "sha256:23cb56daae66fdc3231e4254208e7f6e558b62e46731a9ac54e1abdf3e5f5aba", size = 987540, upload-time = "2026-01-27T18:14:11.349Z" },
 ]
 
 [package.optional-dependencies]
