@@ -103,12 +103,6 @@ async def test_correct_keystore_path(ks: jce.AsyncKeyStore):
     assert ks
 
 
-# async def test_nonexisting_keystore_path():
-#     with pytest.raises(OSError):
-#         _ks = jce.AsyncKeyStore(BASE_TESTSDIR / "files2/")
-#
-
-
 async def test_str(tmp_ks: jce.AsyncKeyStore):
     assert str(tmp_ks) == f"<KeyStore dbpath={tmp_ks.config.connection_config}>"
 
