@@ -5,6 +5,7 @@ import shutil
 import pytest
 from sqlspec import SQLSpec
 from sqlspec.adapters.aiosqlite import AiosqliteConfig
+from sqlspec.adapters.asyncpg import AsyncpgConfig
 import vcr  # pyright: ignore[reportMissingTypeStubs]
 
 import johnnycanencrypt as jce
@@ -19,20 +20,20 @@ pytestmark = pytest.mark.anyio
 
 
 @pytest.fixture
-async def ks():
+async def ks(tmp_path: Path):
     spec = SQLSpec()
-    config = spec.add_config(
-        AiosqliteConfig(
-            connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
-        )
-    )
-    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
-    # pool_config={"min_size": 1, "max_size": 1},
-    # ))
+    db_file = tmp_path / "test.db"
+    config = AiosqliteConfig(connection_config={"database": db_file})
     _ks = await jce.AsyncKeyStore.create(
         spec=spec, config=config, path=BASE_TESTSDIR / "files/store"
     )
-    return _ks
+    dialect = config.driver_type.dialect
+    spec.load_sql_files(BASE_TESTSDIR / "files" / "store" / f"jce_seed_{dialect}.sql")
+    async with spec.provide_session(config) as session:
+        _ = await session.execute_script(spec.get_sql("jce_seed"))
+        await session.commit()
+    yield _ks
+    await _ks.spec.close_all_pools()
 
 
 @pytest.fixture
@@ -40,11 +41,12 @@ async def tmp_ks(tmp_path: Path):
     dbpath = tmp_path / "jce.db"
     spec = SQLSpec()
     config = spec.add_config(AiosqliteConfig(connection_config={"database": dbpath}))
-    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": f"postgres://postgres:postgres@localhost:5432/{uuid.uuid4().hex}"},
+    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": f"postgres://postgres:postgres@localhost:5432/postgres"},
     # pool_config={"min_size": 1, "max_size": 1},
     # ))
     ks = await jce.AsyncKeyStore.create(spec=spec, config=config, path=tmp_path)
-    return ks
+    yield ks
+    await ks.spec.close_all_pools()
 
 
 @pytest.fixture
@@ -59,7 +61,8 @@ async def tmp_ks_mixed(tmp_path: Path):
     # pool_config={"min_size": 1, "max_size": 1},
     # ))
     ks = await jce.AsyncKeyStore.create(spec=spec, config=config, path=tmp_path)
-    return ks
+    yield ks
+    await ks.spec.close_all_pools()
 
 
 async def test_correct_keystore_path(ks: jce.AsyncKeyStore):

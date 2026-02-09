@@ -18,16 +18,16 @@ DATA = "Kushal loves 🦀"
 
 
 @pytest.fixture
-def ks():
+def ks(tmp_path: Path):
     spec = SQLSpec()
-    config = spec.add_config(
-        SqliteConfig(
-            connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
-        )
-    )
+    dbpath = tmp_path / "jce.db"
+    config = spec.add_config(SqliteConfig(connection_config={"database": dbpath}))
     _ks: KeyStoreProtocol = jce.KeyStore.create(
         spec=spec, config=config, path=BASE_TESTSDIR / "files/store"
     )
+    spec.load_sql_files(BASE_TESTSDIR / "files" / "store" / "jce_seed_sqlite.sql")
+    with spec.provide_session(config) as session:
+        _ = session.execute_script(spec.get_sql("jce_seed"))
     return _ks
 
 
