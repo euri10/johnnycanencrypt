@@ -23,6 +23,7 @@ authors = [{name="Kushal Das", email="mail@kushaldas.in"}]
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "aiofiles>=25.1.0",
     "httpx",
     "sqlspec[aiosqlite,asyncpg]>=0.39.0",
     "tzdata",

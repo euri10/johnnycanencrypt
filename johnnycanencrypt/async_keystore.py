@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 import logging
 import os
+import aiofiles
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
@@ -212,8 +213,8 @@ class AsyncKeyStore:
         "Populates the internal database of the store from a keyfile"
         if not subkeys:
             subkeys = {}
-        with open(fullpath, "rb") as fobj:
-            cert = fobj.read()
+        async with aiofiles.open(fullpath, "rb") as fobj:
+            cert = await fobj.read()
         await self._save_key_info_to_db(
             cert, uids, fingerprint, keytype, expirationtime, creationtime, subkeys
         )
@@ -497,8 +498,8 @@ class AsyncKeyStore:
         assert keytype is True
         # Let us write the new keydata to the disk
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
-        with open(key_filename, "wb") as fobj:
-            _ = fobj.write(newcert)
+        async with aiofiles.open(key_filename, "wb") as fobj:
+            await fobj.write(newcert)
         async with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
             _ = await session.execute(
@@ -566,8 +567,8 @@ class AsyncKeyStore:
         assert keytype is True
         # Let us write the new keydata to the disk
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
-        with open(key_filename, "wb") as fobj:
-            _ = fobj.write(newcert)
+        async with aiofiles.open(key_filename, "wb") as fobj:
+            await fobj.write(newcert)
         async with self.spec.provide_session(self.config) as session:
             # First let us update the actual keyvalue
             _ = await session.execute(
@@ -925,8 +926,8 @@ class AsyncKeyStore:
         )
         # Now save the secret key
         key_filename = os.path.join(self.path, f"{fingerprint}.sec")
-        with open(key_filename, "w") as fobj:
-            fobj.write(secret)
+        async with aiofiles.open(key_filename, "w") as fobj:
+            await fobj.write(secret)
 
         key = await self.import_key(key_filename)
 
