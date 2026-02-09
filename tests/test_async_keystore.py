@@ -19,47 +19,81 @@ DATA = "Kushal loves 🦀"
 pytestmark = pytest.mark.anyio
 
 
-@pytest.fixture
-async def ks(tmp_path: Path):
+@pytest.fixture(params=["sqlite", "postgres"])
+async def ks(request, tmp_path: Path):
     spec = SQLSpec()
     db_file = tmp_path / "test.db"
-    config = AiosqliteConfig(connection_config={"database": db_file})
+    if request.param == "postgres":
+        config = AsyncpgConfig(
+            connection_config={
+                "dsn": "postgres://postgres:postgres@localhost:5432/postgres"
+            },
+            pool_config={"min_size": 1, "max_size": 1},
+        )
+    elif request.param == "sqlite":
+        config = AiosqliteConfig(connection_config={"database": db_file})
+    else:
+        raise ValueError("Unknown database type")
     _ks = await jce.AsyncKeyStore.create(
         spec=spec, config=config, path=BASE_TESTSDIR / "files/store"
     )
     dialect = config.driver_type.dialect
     spec.load_sql_files(BASE_TESTSDIR / "files" / "store" / f"jce_seed_{dialect}.sql")
     async with spec.provide_session(config) as session:
+        if config.driver_type.dialect == "postgres":
+            _ = await session.execute_script(spec.get_sql("jce_clean"))
         _ = await session.execute_script(spec.get_sql("jce_seed"))
         await session.commit()
     yield _ks
     await _ks.spec.close_all_pools()
 
 
-@pytest.fixture
-async def tmp_ks(tmp_path: Path):
+@pytest.fixture(params=["sqlite", "postgres"])
+async def tmp_ks(request, tmp_path: Path):
     dbpath = tmp_path / "jce.db"
     spec = SQLSpec()
-    config = spec.add_config(AiosqliteConfig(connection_config={"database": dbpath}))
-    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": f"postgres://postgres:postgres@localhost:5432/postgres"},
-    # pool_config={"min_size": 1, "max_size": 1},
-    # ))
+    if request.param == "postgres":
+        config = AsyncpgConfig(
+            connection_config={
+                "dsn": "postgres://postgres:postgres@localhost:5432/postgres"
+            },
+            pool_config={"min_size": 1, "max_size": 1},
+        )
+    elif request.param == "sqlite":
+        config = spec.add_config(
+            AiosqliteConfig(connection_config={"database": dbpath})
+        )
+    else:
+        raise ValueError("Unknown database type")
     ks = await jce.AsyncKeyStore.create(spec=spec, config=config, path=tmp_path)
+    dialect = config.driver_type.dialect
+    spec.load_sql_files(BASE_TESTSDIR / "files" / "store" / f"jce_seed_{dialect}.sql")
+    async with spec.provide_session(config) as session:
+        if config.driver_type.dialect == "postgres":
+            _ = await session.execute_script(spec.get_sql("jce_clean"))
+        await session.commit()
     yield ks
     await ks.spec.close_all_pools()
 
 
-@pytest.fixture
-async def tmp_ks_mixed(tmp_path: Path):
+@pytest.fixture(params=["sqlite", "postgres"])
+async def tmp_ks_mixed(request, tmp_path: Path):
     spec = SQLSpec()
-    config = spec.add_config(
-        AiosqliteConfig(
-            connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
+    if request.param == "postgres":
+        config = AsyncpgConfig(
+            connection_config={
+                "dsn": "postgres://postgres:postgres@localhost:5432/postgres"
+            },
+            pool_config={"min_size": 1, "max_size": 1},
         )
-    )
-    # config = spec.add_config(AsyncpgConfig(connection_config={"dsn": "postgres://postgres:postgres@localhost:5432/postgres"},
-    # pool_config={"min_size": 1, "max_size": 1},
-    # ))
+    elif request.param == "sqlite":
+        config = spec.add_config(
+            AiosqliteConfig(
+                connection_config={"database": BASE_TESTSDIR / "files/store/jce.db"}
+            )
+        )
+    else:
+        raise ValueError("Unknown database type")
     ks = await jce.AsyncKeyStore.create(spec=spec, config=config, path=tmp_path)
     yield ks
     await ks.spec.close_all_pools()
