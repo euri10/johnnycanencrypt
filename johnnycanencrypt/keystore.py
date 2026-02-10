@@ -120,7 +120,7 @@ class KeyStore:
         current = config.get_current_migration()
         if not current:
             try:
-                config.migrate_up(echo=True)
+                config.migrate_up()
             except Exception as e:
                 raise e
         return self

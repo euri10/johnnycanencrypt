@@ -119,7 +119,7 @@ class AsyncKeyStore:
         current = await config.get_current_migration()
         if not current:
             try:
-                await config.migrate_up(echo=True)
+                await config.migrate_up()
             except Exception as e:
                 raise e
         return self
