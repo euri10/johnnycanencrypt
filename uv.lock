@@ -489,7 +489,7 @@ dev = [
 requires-dist = [
     { name = "aiofiles", specifier = ">=25.1.0" },
     { name = "httpx" },
-    { name = "sqlspec", extras = ["aiosqlite", "asyncpg"], git = "https://github.com/litestar-org/sqlspec.git?rev=65b5cc54de8d60271269e1ad6eb1542b742e4ef0" },
+    { name = "sqlspec", extras = ["aiosqlite", "asyncpg"], git = "https://github.com/litestar-org/sqlspec.git" },
     { name = "tzdata" },
 ]
 
@@ -1176,17 +1176,17 @@ wheels = [
 
 [[package]]
 name = "sqlglot"
-version = "28.10.0"
+version = "28.10.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/69/7d/1479ac3543caada917c3781893d3f846c810aec6355eb7b2f58df68f999b/sqlglot-28.10.0.tar.gz", hash = "sha256:f3d4759164ad854176980b3a47eb0c7ef699118dfa80beeb93e010885637b211", size = 5739594, upload-time = "2026-02-04T14:22:18.26Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1c/66/b2b300f325227044aa6f511ea7c9f3109a1dc74b13a0897931c1754b504e/sqlglot-28.10.1.tar.gz", hash = "sha256:66e0dae43b4bce23314b80e9aef41b8c88fea0e17ada62de095b45262084a8c5", size = 5739510, upload-time = "2026-02-09T23:36:23.671Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a7/34/c5de8f3c110bd066ebfa31b2d948dd33b691c7ccea39065e37f97f3f30a1/sqlglot-28.10.0-py3-none-any.whl", hash = "sha256:d442473bfd2340776dfc88382de3df456b9c5b66974623e554c6ad6426ba365e", size = 597042, upload-time = "2026-02-04T14:22:16.534Z" },
+    { url = "https://files.pythonhosted.org/packages/55/ff/5a768b34202e1ee485737bfa167bd84592585aa40383f883a8e346d767cc/sqlglot-28.10.1-py3-none-any.whl", hash = "sha256:214aef51fd4ce16407022f81cfc80c173409dab6d0f6ae18c52b43f43b31d4dd", size = 597053, upload-time = "2026-02-09T23:36:21.385Z" },
 ]
 
 [[package]]
 name = "sqlspec"
 version = "0.39.0"
-source = { git = "https://github.com/litestar-org/sqlspec.git?rev=65b5cc54de8d60271269e1ad6eb1542b742e4ef0#65b5cc54de8d60271269e1ad6eb1542b742e4ef0" }
+source = { git = "https://github.com/litestar-org/sqlspec.git#657792f5d82e235ef3616569282180dac0b78558" }
 dependencies = [
     { name = "mypy-extensions" },
     { name = "rich-click" },

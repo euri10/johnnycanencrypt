@@ -25,7 +25,7 @@ requires-python = ">=3.10"
 dependencies = [
     "aiofiles>=25.1.0",
     "httpx",
-    "sqlspec[aiosqlite,asyncpg]>=0.39.0",
+    "sqlspec[aiosqlite,asyncpg]",
     "tzdata",
 ]
 
@@ -37,7 +37,7 @@ dependencies = [
 package = false
 
 [tool.uv.sources]
-sqlspec = { git = "https://github.com/litestar-org/sqlspec.git", rev = "65b5cc54de8d60271269e1ad6eb1542b742e4ef0" }
+sqlspec = { git = "https://github.com/litestar-org/sqlspec.git" }
 
 [tool.scriv]
 version = "literal: pyproject.toml: project.version"
